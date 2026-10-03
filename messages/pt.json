@@ -1017,7 +1017,8 @@
         "noVariables": "Este modelo não tem campos para preencher no envio.",
         "bodyVar": "Variável do corpo {n}",
         "headerVar": "Variável do cabeçalho 1",
-        "urlButtonVar": "Sufixo de URL do botão “{label}”"
+        "urlButtonVar": "Sufixo de URL do botão “{label}”",
+        "marketingAutomationHint": "Modelos de marketing podem falhar em automações sem opt-in ou com ofertas desativadas. Prefira modelos Utility para triggers por tag."
       },
       "branches": {
         "yes": "Sim",

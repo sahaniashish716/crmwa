@@ -1017,7 +1017,8 @@
         "noVariables": "Esta plantilla no tiene campos que rellenar al enviar.",
         "bodyVar": "Variable del cuerpo {n}",
         "headerVar": "Variable del encabezado 1",
-        "urlButtonVar": "Sufijo URL del botón “{label}”"
+        "urlButtonVar": "Sufijo URL del botón “{label}”",
+        "marketingAutomationHint": "Las plantillas de marketing pueden no entregarse en automatizaciones si el cliente no ha dado opt-in o desactivó ofertas. Use plantillas Utility para disparadores por etiqueta."
       },
       "branches": {
         "yes": "Sí",

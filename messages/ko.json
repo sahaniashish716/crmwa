@@ -1017,7 +1017,8 @@
         "noVariables": "이 템플릿은 전송 시 입력할 값이 없습니다.",
         "bodyVar": "본문 변수 {n}",
         "headerVar": "헤더 변수 1",
-        "urlButtonVar": "버튼 “{label}” URL 접미사"
+        "urlButtonVar": "버튼 “{label}” URL 접미사",
+        "marketingAutomationHint": "마케팅 템플릿은 수신자가 WhatsApp에서 마케팅 수신을 허용하지 않으면 자동화에서 전달되지 않을 수 있습니다. 태그 트리거에는 Utility 템플릿을 사용하세요."
       },
       "branches": {
         "yes": "예",
