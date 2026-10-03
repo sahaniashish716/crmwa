@@ -1,4 +1,9 @@
-import { sendTextMessage, sendTemplateMessage } from '@/lib/whatsapp/meta-api'
+import {
+  resolveTemplateSendChannel,
+  sendTextMessage,
+  sendTemplateMessage,
+  type TemplateSendChannel,
+} from '@/lib/whatsapp/meta-api'
 import type { InteractiveMessagePayload } from '@/lib/whatsapp/interactive'
 import {
   engineSendInteractiveButtons,
@@ -61,7 +66,7 @@ export async function engineSendText(args: SendTextArgs): Promise<{ whatsapp_mes
 
 export async function engineSendTemplate(
   args: SendTemplateArgs,
-): Promise<{ whatsapp_message_id: string }> {
+): Promise<{ whatsapp_message_id: string; sendChannel?: TemplateSendChannel }> {
   return sendViaMeta({ ...args, kind: 'template' })
 }
 
@@ -112,7 +117,9 @@ type SendInput =
   | (SendTextArgs & { kind: 'text' })
   | (SendTemplateArgs & { kind: 'template' })
 
-async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: string }> {
+async function sendViaMeta(
+  input: SendInput,
+): Promise<{ whatsapp_message_id: string; sendChannel?: TemplateSendChannel }> {
   const db = supabaseAdmin()
 
   // Scope the contact + config lookups by account_id, not user_id.
@@ -171,6 +178,11 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
     templateRow = resolved.row
     sendLanguage = resolved.language
   }
+
+  const templateChannel =
+    input.kind === 'template'
+      ? resolveTemplateSendChannel(templateRow)
+      : undefined
 
   const attempt = async (phone: string): Promise<string> => {
     if (input.kind === 'template') {
@@ -265,5 +277,8 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
     .eq('id', input.conversationId)
     .eq('account_id', input.accountId)
 
-  return { whatsapp_message_id: waMessageId }
+  return {
+    whatsapp_message_id: waMessageId,
+    ...(templateChannel ? { sendChannel: templateChannel } : {}),
+  }
 }

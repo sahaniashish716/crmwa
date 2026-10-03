@@ -454,6 +454,25 @@ import {
   type SendTimeParams,
 } from './template-send-builder'
 
+export type TemplateSendChannel = 'messages' | 'marketing_messages'
+
+/**
+ * Marketing-category templates should use Meta's `/marketing_messages`
+ * endpoint (MM API / marketing lite routing). Utility and Authentication
+ * must stay on `/messages`.
+ *
+ * Set WHATSAPP_MARKETING_MESSAGES_API=false to force Cloud `/messages`
+ * for all templates (legacy/debug).
+ */
+export function resolveTemplateSendChannel(
+  template: MessageTemplate | null | undefined,
+): TemplateSendChannel {
+  if (template?.category !== 'Marketing') return 'messages'
+  const flag = process.env.WHATSAPP_MARKETING_MESSAGES_API
+  if (flag === 'false' || flag === '0') return 'messages'
+  return 'marketing_messages'
+}
+
 export interface SendTemplateMessageArgs {
   phoneNumberId: string
   accessToken: string
@@ -483,25 +502,12 @@ export interface SendTemplateMessageArgs {
   messageParams?: SendTimeParams
   /** Meta's message_id of the message being replied to. */
   contextMessageId?: string
+  /** Override auto-routing (Marketing → marketing_messages). */
+  sendChannel?: TemplateSendChannel
 }
 
-/**
- * Send a pre-approved WhatsApp message template. Required outside
- * the 24-hour window and for any first-touch messaging.
- *
- * Caller paths:
- *   - Legacy: pass `params: string[]` (body only). Same behaviour as
- *     before this helper learned about media + buttons.
- *   - Structured: pass `template` (and optionally `messageParams`).
- *     The full components array is built from the row so media
- *     headers + URL buttons land correctly.
- */
-export async function sendTemplateMessage(
-  args: SendTemplateMessageArgs
-): Promise<MetaSendResult> {
+function buildTemplateSendBody(args: SendTemplateMessageArgs): Record<string, unknown> {
   const {
-    phoneNumberId,
-    accessToken,
     to,
     templateName,
     language = 'en_US',
@@ -510,7 +516,6 @@ export async function sendTemplateMessage(
     messageParams,
     contextMessageId,
   } = args
-  const url = `${META_API_BASE}/${phoneNumberId}/messages`
 
   const templatePayload: Record<string, unknown> = {
     name: templateName,
@@ -519,8 +524,6 @@ export async function sendTemplateMessage(
 
   if (template) {
     const components = buildSendComponents(template, {
-      // Legacy callers pass body values in `params`; fold them into
-      // `messageParams.body` so the new path covers them too.
       body: messageParams?.body ?? params,
       headerText: messageParams?.headerText,
       headerMediaUrl: messageParams?.headerMediaUrl,
@@ -531,7 +534,6 @@ export async function sendTemplateMessage(
       templatePayload.components = components
     }
   } else if (params && params.length > 0) {
-    // Legacy body-only path — no template row available.
     templatePayload.components = [
       {
         type: 'body',
@@ -549,7 +551,16 @@ export async function sendTemplateMessage(
   if (contextMessageId) {
     body.context = { message_id: contextMessageId }
   }
+  return body
+}
 
+async function postTemplateSend(
+  phoneNumberId: string,
+  accessToken: string,
+  channel: TemplateSendChannel,
+  body: Record<string, unknown>,
+): Promise<MetaSendResult> {
+  const url = `${META_API_BASE}/${phoneNumberId}/${channel}`
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -563,6 +574,30 @@ export async function sendTemplateMessage(
   }
   const data = await response.json()
   return { messageId: data.messages[0].id }
+}
+
+/**
+ * Send a pre-approved WhatsApp message template. Required outside
+ * the 24-hour window and for any first-touch messaging.
+ *
+ * Marketing-category templates (when the local `template` row is passed)
+ * are sent via POST `/{phone_number_id}/marketing_messages` unless
+ * WHATSAPP_MARKETING_MESSAGES_API=false.
+ *
+ * Caller paths:
+ *   - Legacy: pass `params: string[]` (body only). Same behaviour as
+ *     before this helper learned about media + buttons.
+ *   - Structured: pass `template` (and optionally `messageParams`).
+ *     The full components array is built from the row so media
+ *     headers + URL buttons land correctly.
+ */
+export async function sendTemplateMessage(
+  args: SendTemplateMessageArgs
+): Promise<MetaSendResult> {
+  const { phoneNumberId, accessToken, template, sendChannel } = args
+  const body = buildTemplateSendBody(args)
+  const channel = sendChannel ?? resolveTemplateSendChannel(template)
+  return postTemplateSend(phoneNumberId, accessToken, channel, body)
 }
 
 // ============================================================

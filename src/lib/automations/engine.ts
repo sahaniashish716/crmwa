@@ -457,7 +457,7 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
             Object.entries(cfg.button_params).map(([k, v]) => [Number(k), String(v)]),
           )
         : undefined
-      const { whatsapp_message_id } = await engineSendTemplate({
+      const { whatsapp_message_id, sendChannel } = await engineSendTemplate({
         accountId: args.automation.account_id,
         userId: args.automation.user_id,
         conversationId,
@@ -471,7 +471,9 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
           buttonParams,
         },
       })
-      return `template sent via Meta (${whatsapp_message_id})`
+      const via =
+        sendChannel === 'marketing_messages' ? 'marketing_messages' : 'messages'
+      return `template sent via Meta/${via} (${whatsapp_message_id})`
     }
 
     case 'add_tag': {
