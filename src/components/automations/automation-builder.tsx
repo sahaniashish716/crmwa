@@ -62,6 +62,7 @@ import {
   blankListPayload,
 } from "@/components/interactive/interactive-builder"
 import { interactivePayloadPreviewText } from "@/lib/whatsapp/interactive"
+import { extractVariableIndices } from "@/lib/whatsapp/template-validators"
 import { createClient } from "@/lib/supabase/client"
 import {
   childPath,
@@ -180,7 +181,13 @@ function blankConfig(type: AutomationStepType): Record<string, unknown> {
     case "send_list":
       return toStepConfig(blankListPayload())
     case "send_template":
-      return { template_name: "", language: "en_US" }
+      return {
+        template_name: "",
+        language: "en_US",
+        variables: {},
+        header_text: "",
+        button_params: {},
+      }
     case "add_tag":
     case "remove_tag":
       return { tag_id: "" }
@@ -551,20 +558,43 @@ function DealPipelineFields({
   )
 }
 
+function templateVariableSlots(template: MessageTemplate): {
+  bodyIndices: number[]
+  headerVar: boolean
+  urlButtons: { index: number; text: string }[]
+} {
+  const bodyIndices = extractVariableIndices(template.body_text)
+  const headerVar =
+    template.header_type === "text" &&
+    !!template.header_content &&
+    extractVariableIndices(template.header_content).length > 0
+  const urlButtons: { index: number; text: string }[] = []
+  ;(template.buttons ?? []).forEach((b, i) => {
+    if (b.type === "URL" && extractVariableIndices(b.url).length > 0) {
+      urlButtons.push({ index: i, text: b.text })
+    }
+  })
+  return { bodyIndices, headerVar, urlButtons }
+}
+
 /** Template dropdown showing approved templates by name + language,
  *  storing both template_name and language. Falls back to manual name +
  *  language inputs when no approved templates are synced yet. */
 function SendTemplateFields({
-  templateName,
-  language,
+  cfg,
   onChange,
   t,
 }: {
-  templateName: string
-  language: string
-  onChange: (patch: { template_name: string; language: string }) => void
+  cfg: Record<string, unknown>
+  onChange: (patch: Record<string, unknown>) => void
   t: ReturnType<typeof useTranslations>
 }) {
+  const templateName = (cfg.template_name as string) ?? ""
+  const language = (cfg.language as string) ?? "en_US"
+  const variables = (cfg.variables as Record<string, string>) ?? {}
+  const headerText = (cfg.header_text as string) ?? ""
+  const buttonParams = (cfg.button_params as Record<string, string>) ?? {}
+
   const { templates } = useResources()
 
   if (templates.length === 0) {
@@ -574,7 +604,7 @@ function SendTemplateFields({
           <Input
             value={templateName}
             onChange={(e) =>
-              onChange({ template_name: e.target.value, language })
+              onChange({ template_name: e.target.value, language, variables, header_text: headerText, button_params: buttonParams })
             }
             className="bg-muted text-foreground"
           />
@@ -583,7 +613,7 @@ function SendTemplateFields({
           <Input
             value={language}
             onChange={(e) =>
-              onChange({ template_name: templateName, language: e.target.value })
+              onChange({ template_name: templateName, language: e.target.value, variables, header_text: headerText, button_params: buttonParams })
             }
             className="bg-muted text-foreground"
           />
@@ -600,13 +630,19 @@ function SendTemplateFields({
     (t) => toValue(t.name, t.language ?? "en_US") === current,
   )
 
-  return (
+  const picker = (
     <FieldBlock label={t("templates.templateLabel")}>
       <select
         value={current}
         onChange={(e) => {
           const [name, lang] = e.target.value.split("::")
-          onChange({ template_name: name ?? "", language: lang ?? "" })
+          onChange({
+            template_name: name ?? "",
+            language: lang ?? "",
+            variables: {},
+            header_text: "",
+            button_params: {},
+          })
         }}
         className={SELECT_CLASS}
       >
@@ -626,6 +662,73 @@ function SendTemplateFields({
         )}
       </select>
     </FieldBlock>
+  )
+
+  const selected = templates.find(
+    (tmpl) =>
+      tmpl.name === templateName &&
+      (tmpl.language ?? "en_US") === (language || "en_US"),
+  )
+  if (!selected) return picker
+
+  const slots = templateVariableSlots(selected)
+  const hasAny =
+    slots.bodyIndices.length > 0 || slots.headerVar || slots.urlButtons.length > 0
+
+  return (
+    <>
+      {picker}
+      {!hasAny ? (
+        <p className="text-[11px] text-muted-foreground">{t("templates.noVariables")}</p>
+      ) : (
+        <>
+          {slots.bodyIndices.map((idx) => (
+            <FieldBlock key={`body-${idx}`} label={t("templates.bodyVar", { n: idx })}>
+              <Input
+                value={variables[String(idx)] ?? ""}
+                onChange={(e) =>
+                  onChange({
+                    variables: { ...variables, [String(idx)]: e.target.value },
+                  })
+                }
+                placeholder={t("templates.varPlaceholder")}
+                className="bg-muted text-foreground"
+              />
+            </FieldBlock>
+          ))}
+          {slots.headerVar && (
+            <FieldBlock label={t("templates.headerVar")}>
+              <Input
+                value={headerText}
+                onChange={(e) => onChange({ header_text: e.target.value })}
+                placeholder={t("templates.varPlaceholder")}
+                className="bg-muted text-foreground"
+              />
+            </FieldBlock>
+          )}
+          {slots.urlButtons.map((btn) => (
+            <FieldBlock
+              key={`btn-${btn.index}`}
+              label={t("templates.urlButtonVar", { label: btn.text })}
+            >
+              <Input
+                value={buttonParams[String(btn.index)] ?? ""}
+                onChange={(e) =>
+                  onChange({
+                    button_params: {
+                      ...buttonParams,
+                      [String(btn.index)]: e.target.value,
+                    },
+                  })
+                }
+                placeholder={t("templates.varPlaceholder")}
+                className="bg-muted text-foreground"
+              />
+            </FieldBlock>
+          ))}
+        </>
+      )}
+    </>
   )
 }
 
@@ -1385,8 +1488,7 @@ function StepEditor({
     case "send_template":
       return (
         <SendTemplateFields
-          templateName={(cfg.template_name as string) ?? ""}
-          language={(cfg.language as string) ?? ""}
+          cfg={cfg}
           onChange={(patch) => set(patch)}
           t={t}
         />

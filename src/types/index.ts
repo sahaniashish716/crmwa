@@ -555,7 +555,12 @@ export type SendListStepConfig = InteractiveMessagePayload;
 export interface SendTemplateStepConfig {
   template_name: string;
   language?: string;
+  /** Body {{1}}, {{2}}, … keyed by variable index as string. */
   variables?: Record<string, string>;
+  /** TEXT header {{1}} when the template header has a variable. */
+  header_text?: string;
+  /** URL / COPY_CODE button overrides keyed by button index (string). */
+  button_params?: Record<string, string>;
 }
 
 export interface TagStepConfig {

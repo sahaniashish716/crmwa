@@ -1013,7 +1013,12 @@
         "languageLabel": "Language",
         "select": "Select a template…",
         "unknown": "{name} ({lang}) — not in approved list",
-        "unknownLang": "unknown"
+        "unknownLang": "unknown",
+        "noVariables": "This template has no fill-in fields at send time.",
+        "bodyVar": "Body variable {{n}}",
+        "headerVar": "Header variable {{1}}",
+        "urlButtonVar": "Button “{label}” URL suffix",
+        "varPlaceholder": "Text or {{ contact.name }}"
       },
       "branches": {
         "yes": "Yes",

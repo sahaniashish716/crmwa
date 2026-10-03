@@ -16,6 +16,7 @@ import {
   resolveTemplateRow,
   templateContentText,
 } from '@/lib/whatsapp/template-body'
+import type { SendTimeParams } from '@/lib/whatsapp/template-send-builder'
 import { supabaseAdmin } from './admin-client'
 
 // ------------------------------------------------------------
@@ -51,6 +52,7 @@ interface SendTemplateArgs {
   templateName: string
   language?: string
   params?: string[]
+  messageParams?: SendTimeParams
 }
 
 export async function engineSendText(args: SendTextArgs): Promise<{ whatsapp_message_id: string }> {
@@ -152,31 +154,36 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
 
   const accessToken = decrypt(config.access_token)
 
-  // Local template row — read for the body we persist below, not for
-  // the Meta payload (the wire shape is deliberately unchanged here).
-  // A missing row is fine: the send still goes out, we just can't
-  // reconstruct the text the customer saw.
-  const templateRow =
-    input.kind === 'template'
-      ? (
-          await resolveTemplateRow(
-            db,
-            input.accountId,
-            input.templateName,
-            input.language,
-          )
-        ).row
-      : null
+  let templateRow: Awaited<ReturnType<typeof resolveTemplateRow>>['row'] = null
+  let sendLanguage = input.kind === 'template' ? input.language ?? 'en_US' : 'en_US'
+  if (input.kind === 'template') {
+    const resolved = await resolveTemplateRow(
+      db,
+      input.accountId,
+      input.templateName,
+      input.language,
+    )
+    if (resolved.malformed) {
+      throw new Error(
+        'Template row is malformed locally — run Sync from Meta in Settings to repair it.',
+      )
+    }
+    templateRow = resolved.row
+    sendLanguage = resolved.language
+  }
 
   const attempt = async (phone: string): Promise<string> => {
     if (input.kind === 'template') {
+      const body = input.messageParams?.body ?? input.params ?? []
       const r = await sendTemplateMessage({
         phoneNumberId: config.phone_number_id,
         accessToken,
         to: phone,
         templateName: input.templateName,
-        language: input.language,
-        params: input.params,
+        language: sendLanguage,
+        template: templateRow ?? undefined,
+        messageParams: input.messageParams ?? (body.length > 0 ? { body } : undefined),
+        params: body,
       })
       return r.messageId
     }
@@ -224,7 +231,10 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
   const content_text =
     input.kind === 'text'
       ? input.text
-      : templateContentText(templateRow, input.params ?? [])
+      : templateContentText(
+          templateRow,
+          input.messageParams?.body ?? input.params ?? [],
+        )
   const template_name = input.kind === 'template' ? input.templateName : null
 
   const { error: msgErr } = await db.from('messages').insert({

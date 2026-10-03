@@ -452,6 +452,11 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
             })
             .map((k) => String(cfg.variables![k]))
         : []
+      const buttonParams = cfg.button_params
+        ? Object.fromEntries(
+            Object.entries(cfg.button_params).map(([k, v]) => [Number(k), String(v)]),
+          )
+        : undefined
       const { whatsapp_message_id } = await engineSendTemplate({
         accountId: args.automation.account_id,
         userId: args.automation.user_id,
@@ -460,6 +465,11 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         templateName: cfg.template_name,
         language: cfg.language,
         params,
+        messageParams: {
+          body: params,
+          headerText: cfg.header_text,
+          buttonParams,
+        },
       })
       return `template sent via Meta (${whatsapp_message_id})`
     }
