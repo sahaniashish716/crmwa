@@ -1013,7 +1013,11 @@
         "languageLabel": "언어",
         "select": "템플릿 선택…",
         "unknown": "{name} ({lang}) — 승인 목록에 없음",
-        "unknownLang": "알 수 없음"
+        "unknownLang": "알 수 없음",
+        "noVariables": "이 템플릿은 전송 시 입력할 값이 없습니다.",
+        "bodyVar": "본문 변수 {n}",
+        "headerVar": "헤더 변수 1",
+        "urlButtonVar": "버튼 “{label}” URL 접미사"
       },
       "branches": {
         "yes": "예",
@@ -1055,6 +1059,7 @@
           "time_of_day": "시간대"
         },
         "operandLabel": "피연산자",
+        "tagPresenceHint": "예 분기는 연락처에 이 태그가 있을 때 실행됩니다. tags.id를 사용하세요(contact_tags.id 아님).",
         "placeholderTime": "HH:mm-HH:mm",
         "placeholderContact": "이름 / 이메일 / 회사",
         "placeholderTag": "태그 id",

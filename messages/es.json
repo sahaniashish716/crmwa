@@ -1013,7 +1013,11 @@
         "languageLabel": "Idioma",
         "select": "Selecciona una plantilla…",
         "unknown": "{name} ({lang}): no está en la lista de aprobadas",
-        "unknownLang": "desconocido"
+        "unknownLang": "desconocido",
+        "noVariables": "Esta plantilla no tiene campos que rellenar al enviar.",
+        "bodyVar": "Variable del cuerpo {n}",
+        "headerVar": "Variable del encabezado 1",
+        "urlButtonVar": "Sufijo URL del botón “{label}”"
       },
       "branches": {
         "yes": "Sí",
@@ -1055,6 +1059,7 @@
           "time_of_day": "Hora del día"
         },
         "operandLabel": "Operando",
+        "tagPresenceHint": "La rama Sí se ejecuta cuando el contacto tiene esta etiqueta. Usa tags.id, no contact_tags.id.",
         "placeholderTime": "HH:mm-HH:mm",
         "placeholderContact": "name / email / company",
         "placeholderTag": "id de etiqueta",

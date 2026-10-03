@@ -1013,7 +1013,11 @@
         "languageLabel": "Idioma",
         "select": "Selecione um modelo…",
         "unknown": "{name} ({lang}) — não está na lista de aprovados",
-        "unknownLang": "desconhecido"
+        "unknownLang": "desconhecido",
+        "noVariables": "Este modelo não tem campos para preencher no envio.",
+        "bodyVar": "Variável do corpo {n}",
+        "headerVar": "Variável do cabeçalho 1",
+        "urlButtonVar": "Sufixo de URL do botão “{label}”"
       },
       "branches": {
         "yes": "Sim",
@@ -1055,6 +1059,7 @@
           "time_of_day": "Hora do dia"
         },
         "operandLabel": "Operando",
+        "tagPresenceHint": "O ramo Sim executa quando o contacto tem esta tag. Use tags.id, não contact_tags.id.",
         "placeholderTime": "HH:mm-HH:mm",
         "placeholderContact": "name / email / company",
         "placeholderTag": "id da tag",

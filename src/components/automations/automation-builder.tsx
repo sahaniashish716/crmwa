@@ -691,7 +691,7 @@ function SendTemplateFields({
                     variables: { ...variables, [String(idx)]: e.target.value },
                   })
                 }
-                placeholder={t("templates.varPlaceholder")}
+                placeholder={t.raw("config.placeholderValue")}
                 className="bg-muted text-foreground"
               />
             </FieldBlock>
@@ -701,7 +701,7 @@ function SendTemplateFields({
               <Input
                 value={headerText}
                 onChange={(e) => onChange({ header_text: e.target.value })}
-                placeholder={t("templates.varPlaceholder")}
+                placeholder={t.raw("config.placeholderValue")}
                 className="bg-muted text-foreground"
               />
             </FieldBlock>
@@ -721,7 +721,7 @@ function SendTemplateFields({
                     },
                   })
                 }
-                placeholder={t("templates.varPlaceholder")}
+                placeholder={t.raw("config.placeholderValue")}
                 className="bg-muted text-foreground"
               />
             </FieldBlock>
