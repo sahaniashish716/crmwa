@@ -1017,7 +1017,8 @@
         "noVariables": "This template has no fill-in fields at send time.",
         "bodyVar": "Body variable {n}",
         "headerVar": "Header variable 1",
-        "urlButtonVar": "Button “{label}” URL suffix"
+        "urlButtonVar": "Button “{label}” URL suffix",
+        "marketingAutomationHint": "Marketing templates often fail in automations if the customer has not opted in to marketing on WhatsApp, has turned off “Offers and announcements” for your business, or Meta throttles marketing. Prefer a Utility template for tag triggers, or use Broadcasts after collecting opt-in."
       },
       "branches": {
         "yes": "Yes",

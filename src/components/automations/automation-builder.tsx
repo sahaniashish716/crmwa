@@ -678,6 +678,11 @@ function SendTemplateFields({
   return (
     <>
       {picker}
+      {selected.category === "Marketing" && (
+        <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-500">
+          {t("templates.marketingAutomationHint")}
+        </p>
+      )}
       {!hasAny ? (
         <p className="text-[11px] text-muted-foreground">{t("templates.noVariables")}</p>
       ) : (
