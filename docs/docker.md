@@ -74,3 +74,8 @@ docker run -d --env-file .env.local -e PORT=3000 -p 3000:3000 wacrm
   deployment, sending the shared secret in the `x-cron-secret` header
   (`AUTOMATION_CRON_SECRET`, see `.env.local.example`). Both return
   503 until that variable is set.
+- **Vercel Hobby** cannot deploy minute-level Vercel Cron Jobs (see
+  `vercel.crons.pro.example.json` for Pro). The repo ships with an
+  empty `vercel.json` `crons` list so Production deploys succeed; use
+  an external scheduler (e.g. cron-job.org) on Hobby, or upgrade to Pro
+  and merge the example crons into `vercel.json`.
