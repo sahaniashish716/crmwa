@@ -1,0 +1,27 @@
+# Pings production (or staging) so Wait steps and time_based automations run
+# on hosts without minute-level Vercel Cron (e.g. Hobby).
+#
+# Required repository secrets:
+#   CRM_CRON_BASE_URL  — e.g. https://crmwa-dynamoenterprises.vercel.app
+#   AUTOMATION_CRON_SECRET — same as Vercel env AUTOMATION_CRON_SECRET
+name: Automation cron drain
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  drain:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call automation cron endpoint
+        env:
+          BASE_URL: ${{ secrets.CRM_CRON_BASE_URL }}
+          CRON_SECRET: ${{ secrets.AUTOMATION_CRON_SECRET }}
+        run: |
+          if [ -z "$BASE_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "Skipping: set CRM_CRON_BASE_URL and AUTOMATION_CRON_SECRET repo secrets."
+            exit 0
+          fi
+          curl -sfS -H "x-cron-secret: $CRON_SECRET" "${BASE_URL%/}/api/automations/cron"

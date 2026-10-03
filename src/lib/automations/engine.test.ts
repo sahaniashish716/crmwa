@@ -155,6 +155,11 @@ vi.mock("@/lib/whatsapp/resolve-conversation", () => ({
   ensureConversationForContact: ensureConv.fn,
 }));
 
+vi.mock("./cron-drain", () => ({
+  drainAutomationDueWork: vi.fn(async () => ({ processed: 0, scheduled: 0 })),
+  isAutomationCronConfigured: vi.fn(() => false),
+}));
+
 import { runAutomationsForTrigger, triggerMatches } from "./engine";
 import type { Automation, KeywordMatchTriggerConfig } from "@/types";
 
@@ -477,6 +482,53 @@ describe("triggerMatches — interactive_reply", () => {
   it("does not match when no reply id is present or config is empty", () => {
     expect(triggerMatches(automation(["yes"]), {})).toBe(false);
     expect(triggerMatches(automation([]), { interactive_reply_id: "yes" })).toBe(false);
+  });
+});
+
+describe("runAutomationsForTrigger — time_based cron", () => {
+  it("executes when automationId is set (cron scheduler path)", async () => {
+    h.state.automations = [{
+      id: "tb1",
+      account_id: ACCOUNT,
+      user_id: "u1",
+      name: "daily",
+      trigger_type: "time_based",
+      trigger_config: { schedule: "09:00", timezone: "UTC" },
+      is_active: true,
+    }];
+    h.state.steps = [{
+      id: "s1",
+      automation_id: "tb1",
+      step_type: "send_message",
+      position: 0,
+      parent_step_id: null,
+      step_config: { body: "hello" },
+    }];
+
+    await runAutomationsForTrigger({
+      accountId: ACCOUNT,
+      triggerType: "time_based",
+      automationId: "tb1",
+      context: {},
+    });
+
+    expect(h.state.logInserts.length).toBe(1);
+    expect(h.state.logInserts[0]?.trigger_event).toBe("time_based");
+  });
+});
+
+describe("triggerMatches — time_based", () => {
+  it("never matches from inbound dispatch (cron-only trigger)", () => {
+    const automation = {
+      id: "a1",
+      account_id: ACCOUNT,
+      user_id: "u1",
+      name: "daily",
+      trigger_type: "time_based",
+      trigger_config: { schedule: "09:00" },
+      is_active: true,
+    } as unknown as Automation;
+    expect(triggerMatches(automation, {})).toBe(false);
   });
 });
 

@@ -60,6 +60,8 @@ export interface DispatchInput {
    *  needed (sender identity for outbound messages, log audit). */
   accountId: string
   triggerType: AutomationTriggerType
+  /** When set (time_based cron), only this automation row runs. */
+  automationId?: string
   contactId?: string | null
   context?: AutomationContext
 }
@@ -140,12 +142,31 @@ export async function runAutomationsForTrigger(input: DispatchInput): Promise<vo
     if (!automations || automations.length === 0) return
 
     for (const automation of automations as Automation[]) {
-      if (!triggerMatches(automation, input.context)) continue
+      if (input.automationId && automation.id !== input.automationId) continue
+      // Cron passes automationId for time_based rows; triggerMatches always
+      // returns false for that type so inbound traffic cannot fire schedules.
+      const cronScheduledTimeBased =
+        input.triggerType === 'time_based' &&
+        input.automationId != null &&
+        automation.id === input.automationId
+      if (!cronScheduledTimeBased && !triggerMatches(automation, input.context)) continue
       try {
         await executeAutomation(automation, input)
       } catch (err) {
         console.error('[automations] execute failed:', automation.id, err)
       }
+    }
+
+    // Resume due Wait steps (and time_based schedules) after contact-driven
+    // triggers. On Vercel Hobby there is often no minute-level cron; this
+    // piggyback clears waits when the account sees any automation traffic.
+    // External cron (see docs/automation-cron.md) remains required for idle
+    // accounts and sub-minute precision without inbound events.
+    if (input.triggerType !== 'time_based') {
+      const { drainAutomationDueWork } = await import('./cron-drain')
+      await drainAutomationDueWork(20).catch((err) =>
+        console.error('[automations] post-dispatch cron drain failed:', err),
+      )
     }
   } catch (err) {
     console.error('[automations] dispatch failed:', err)
@@ -802,6 +823,11 @@ export function triggerMatches(automation: Automation, ctx: AutomationContext | 
     const cfg = automation.trigger_config as TagTriggerConfig
     const tagId = ctx?.tag_id
     return Boolean(tagId && cfg?.tag_id && cfg.tag_id === tagId)
+  }
+
+  if (automation.trigger_type === 'time_based') {
+    // Only the cron scheduler should fire these (with automationId set).
+    return false
   }
 
   return true

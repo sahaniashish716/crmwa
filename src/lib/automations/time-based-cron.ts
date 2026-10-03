@@ -27,6 +27,7 @@ export async function runDueTimeBasedAutomations(now: Date = new Date()): Promis
     await runAutomationsForTrigger({
       accountId: row.account_id,
       triggerType: 'time_based',
+      automationId: row.id,
       contactId: undefined,
       context: {},
     }).catch((err) => console.error('[automations] time_based dispatch failed:', err))
