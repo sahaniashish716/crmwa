@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { verifyCronSecret } from '@/lib/cron-auth'
 import { drainAutomationDueWork } from '@/lib/automations/cron-drain'
 
+export const maxDuration = 60
+
 /**
  * Drain due `automation_pending_executions` rows and fire due time_based
  * automations. Hit on a schedule (GitHub Actions, cron-job.org, Vercel Cron
