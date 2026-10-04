@@ -1,55 +1,59 @@
 # Automation cron (Wait steps + time-based triggers)
 
-**Wait** steps and **time-based** triggers depend on a background job that
-calls:
+**Wait** steps and **time-based** triggers need an external job that calls:
 
 ```http
 GET https://YOUR-DOMAIN/api/automations/cron
 x-cron-secret: YOUR_AUTOMATION_CRON_SECRET
 ```
 
-Set **`AUTOMATION_CRON_SECRET`** on Vercel (Production). On Vercel Cron
-(Pro), also set **`CRON_SECRET`** to the same value.
+Set **`AUTOMATION_CRON_SECRET`** on Vercel (Production).
 
 ## Vercel Hobby
 
-Hobby plans cannot run Vercel Cron more than **once per day**. This repo ships
-with an empty `vercel.json` cron list so deploys succeed. Use one of:
+Hobby cannot use minute-level Vercel Cron (this repo ships `"crons": []`).
 
-1. **GitHub Actions** (recommended): enable workflow
-   `.github/workflows/automation-cron.yml` and add repository secrets
-   `AUTOMATION_CRON_SECRET` and `CRM_CRON_BASE_URL` (e.g.
-   `https://crmwa-dynamoenterprises.vercel.app`).
+### Primary (recommended): cron-job.org every 1 minute
 
-2. **cron-job.org** (or similar): ping the URL **every 1 minute** with the
-   `x-cron-secret` header (5-minute pings make Wait steps feel much slower).
+GitHub Actions **does not** run every minute reliably (delays of hours are normal).
 
-3. **Partial piggyback**: after inbound WhatsApp messages (and other automation
-   triggers), the engine drains due waits in-process. Idle contacts still need
-   an external ping every few minutes for reliable Wait steps and time-based
-   schedules.
+1. Create a free job at [cron-job.org](https://cron-job.org).
+2. URL: `https://YOUR-DOMAIN/api/automations/cron`
+3. Schedule: **every 1 minute**
+4. Header: `x-cron-secret` = your `AUTOMATION_CRON_SECRET`
+5. Method: **GET**
 
-## Time-based schedules
+This gives predictable Wait timing (~1 minute after `run_at`).
 
-- Use **cron** (`0 9 * * 1-5`) or daily **`HH:mm`** (24h) in the trigger.
-- **`*/5 * * * *`** means “every 5 minutes” (fires once at least 5 minutes
-  after the last run, on the next cron ping — not only at :00/:05 on the clock).
-- Optional **timezone** (IANA, e.g. `Asia/Kolkata`); defaults to UTC if empty.
+### Secondary: GitHub Actions
+
+Workflow `.github/workflows/automation-cron.yml` runs about **every 5 minutes**
+as a backup. Secrets: `CRM_CRON_BASE_URL`, `AUTOMATION_CRON_SECRET`.
+
+Manual **Run workflow** is good for testing only — do not rely on it for schedules.
+
+### Piggyback
+
+Tag changes and inbound WhatsApp also resume due waits for your account, but
+**long nurture (7–180 days)** still needs cron-job.org (or similar) running 24/7.
 
 ## Wait step timing
 
-A **5 minute** wait means `run_at = now + 5 minutes`. The follow-up runs on
-the **next cron ping after** that time. With GitHub Actions every **1** minute,
-expect about **5–6 minutes** total. With a **5 minute** external ping, expect
-**5–10 minutes**. Runs stuck **partial** for hours usually mean the pending row
-is missing or was left in `running` (reclaimed automatically after 10 minutes
-once this fix is deployed).
+Logs show **`until …` (UTC)** on the wait step. The message sends on the first
+cron ping **after** that time.
+
+| Pinger | Typical slack after `run_at` |
+|--------|------------------------------|
+| cron-job.org **1 min** | ~0–1 min |
+| GitHub **~5 min** | ~0–5 min |
+| Tag/message only | Until next event (unpredictable) |
 
 ## Verify
 
 ```bash
-curl -s -H "x-cron-secret: YOUR_SECRET" \
+curl -s -w "\nHTTP %{http_code}\n" \
+  -H "x-cron-secret: YOUR_SECRET" \
   "https://YOUR-DOMAIN/api/automations/cron"
 ```
 
-Expect JSON: `{"processed":0,"scheduled":0}` (numbers vary).
+Expect **200** and JSON like `{"processed":0,"scheduled":0}`.

@@ -1,20 +1,26 @@
-# Pings production (or staging) so Wait steps and time_based automations run
-# on hosts without minute-level Vercel Cron (e.g. Hobby).
+# Backup drain for Wait steps + time-based automations (Vercel Hobby).
 #
-# Required repository secrets:
-#   CRM_CRON_BASE_URL  — e.g. https://crmwa-dynamoenterprises.vercel.app
-#   AUTOMATION_CRON_SECRET — same as Vercel env AUTOMATION_CRON_SECRET
+# GitHub scheduled workflows are NOT every minute in practice — runs can be
+# delayed by hours and overlap. For reliable 1-minute pings use cron-job.org
+# (see docs/automation-cron.md). Keep this workflow as a secondary safety net.
+#
+# Secrets: CRM_CRON_BASE_URL, AUTOMATION_CRON_SECRET
 name: Automation cron drain
 
 on:
   schedule:
-    # Every minute — keeps 5-minute Wait steps closer to ~5–6 min (not ~10).
-    - cron: '*/1 * * * *'
+    # GitHub minimum / typical cadence for scheduled workflows (~5 minutes).
+    - cron: '*/5 * * * *'
   workflow_dispatch:
+
+concurrency:
+  group: automation-cron-drain
+  cancel-in-progress: true
 
 jobs:
   drain:
     runs-on: ubuntu-latest
+    timeout-minutes: 2
     steps:
       - name: Call automation cron endpoint
         env:
@@ -25,4 +31,14 @@ jobs:
             echo "Skipping: set CRM_CRON_BASE_URL and AUTOMATION_CRON_SECRET repo secrets."
             exit 0
           fi
-          curl -sfS -H "x-cron-secret: $CRON_SECRET" "${BASE_URL%/}/api/automations/cron"
+          URL="${BASE_URL%/}/api/automations/cron"
+          for attempt in 1 2 3; do
+            if curl -sfS --connect-timeout 20 --max-time 90 \
+              -H "x-cron-secret: $CRON_SECRET" "$URL"; then
+              exit 0
+            fi
+            echo "Attempt $attempt failed, retrying..."
+            sleep 5
+          done
+          echo "All attempts failed"
+          exit 1
