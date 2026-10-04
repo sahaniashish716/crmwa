@@ -517,8 +517,19 @@ export interface KeywordMatchTriggerConfig {
   case_sensitive?: boolean;
 }
 
+export interface TagRecurrenceConfig {
+  /** When false, run once per tag add (default if recurrence omitted). */
+  enabled?: boolean;
+  amount: number;
+  unit: 'minutes' | 'hours' | 'days' | 'weeks' | 'months';
+  /** Default true — inbound WhatsApp cancels scheduled repeats. */
+  stop_on_inbound?: boolean;
+}
+
 export interface TagTriggerConfig {
   tag_id: string;
+  /** Re-run the full automation after each successful completion. */
+  recurrence?: TagRecurrenceConfig;
 }
 
 export interface TimeBasedTriggerConfig {

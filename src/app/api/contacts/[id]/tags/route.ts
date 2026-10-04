@@ -66,6 +66,11 @@ export async function DELETE(
       tagId,
     });
 
+    {
+      const { cancelRecurrenceForContact } = await import('@/lib/automations/recurrence');
+      await cancelRecurrenceForContact(ctx.accountId, contactId).catch(() => undefined);
+    }
+
     return NextResponse.json({ ok: true });
   } catch (error) {
     if (error instanceof ContactTagWriteError) {

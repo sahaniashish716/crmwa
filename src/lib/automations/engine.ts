@@ -37,6 +37,11 @@ import {
   enqueueAutomationWait,
   formatWaitDetail,
 } from './wait-scheduler'
+import {
+  RECURRENCE_TICK_VAR,
+  isRecurrenceTickContext,
+  scheduleTagRecurrenceIfConfigured,
+} from './recurrence'
 
 // ------------------------------------------------------------
 // Public API
@@ -69,6 +74,8 @@ export interface DispatchInput {
   automationId?: string
   contactId?: string | null
   context?: AutomationContext
+  /** Recurrence tick — do not clear pending waits scheduled for the next loop. */
+  skipPendingCancel?: boolean
 }
 
 /**
@@ -210,6 +217,21 @@ export async function resumePendingExecution(pending: {
   }
 
   try {
+    if (isRecurrenceTickContext(pending.context)) {
+      const ctx = pending.context ?? {}
+      const vars = { ...(ctx.vars ?? {}) }
+      delete vars[RECURRENCE_TICK_VAR]
+      await executeAutomation(automation as Automation, {
+        accountId: automation.account_id,
+        triggerType: 'tag_added',
+        contactId: pending.contact_id,
+        context: { ...ctx, vars },
+        skipPendingCancel: true,
+      })
+      await markPending(pending.id, 'done')
+      return
+    }
+
     const outcome = await executeStepsFrom({
       automation: automation as Automation,
       contactId: pending.contact_id,
@@ -228,6 +250,11 @@ export async function resumePendingExecution(pending: {
       if (rpcErr) {
         console.error('[automations] increment counter after resume failed:', rpcErr)
       }
+      await scheduleTagRecurrenceIfConfigured(
+        automation as Automation,
+        pending.contact_id,
+        pending.context,
+      )
     }
   } catch (err) {
     console.error('[automations] resume failed:', err)
@@ -242,7 +269,7 @@ export async function resumePendingExecution(pending: {
 async function executeAutomation(automation: Automation, input: DispatchInput) {
   const db = supabaseAdmin()
 
-  if (input.contactId) {
+  if (input.contactId && !input.skipPendingCancel) {
     await cancelPendingWaitsForContact(automation.id, input.contactId)
   }
 
@@ -296,6 +323,9 @@ async function executeAutomation(automation: Automation, input: DispatchInput) {
     if (rpcErr) {
       console.error('[automations] increment counter failed:', rpcErr)
     }
+  }
+  if (outcome === 'completed') {
+    await scheduleTagRecurrenceIfConfigured(automation, input.contactId, input.context)
   }
 }
 

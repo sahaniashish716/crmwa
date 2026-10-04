@@ -857,6 +857,13 @@ async function processMessage(
   // trigger installed in migration 003).
   await flagBroadcastReplyIfAny(accountId, contactRecord.id)
 
+  {
+    const { cancelRecurrenceForContact } = await import('@/lib/automations/recurrence')
+    await cancelRecurrenceForContact(accountId, contactRecord.id).catch((err) =>
+      console.error('[automations] cancel recurrence on inbound failed:', err),
+    )
+  }
+
   // ============================================================
   // Flow runner dispatch.
   //

@@ -235,6 +235,26 @@ export function validateTriggerForActivation(
     if (!nonEmpty(cfg.tag_id)) {
       issues.push({ path: 'trigger.tag_id', message: 'tag is required' })
     }
+    const rec = cfg.recurrence as
+      | { enabled?: boolean; amount?: unknown; unit?: unknown; stop_on_inbound?: boolean }
+      | undefined
+    if (rec && rec.enabled !== false) {
+      const amount = Number(rec.amount)
+      if (!Number.isFinite(amount) || amount <= 0) {
+        issues.push({
+          path: 'trigger.recurrence.amount',
+          message: 'repeat interval amount must be greater than 0',
+        })
+      }
+      if (
+        !['minutes', 'hours', 'days', 'weeks', 'months'].includes(String(rec.unit ?? ''))
+      ) {
+        issues.push({
+          path: 'trigger.recurrence.unit',
+          message: 'repeat interval unit is invalid',
+        })
+      }
+    }
   } else if (triggerType === 'interactive_reply') {
     const ids = cfg.reply_ids
     if (!Array.isArray(ids) || ids.length === 0) {

@@ -21,6 +21,13 @@ schedules its own wait. Each log row shows **until YYYY-MM-DD…** (UTC) for the
 3. Re-applying the **same** tag does **not** restart the automation; remove the tag
    and add again if you need a fresh schedule.
 
+## Repeat every X (until reply)
+
+On **Tag added** trigger, enable **Repeat entire automation on an interval**. After
+each **successful** run (all steps finished), the next run is scheduled automatically —
+no re-tagging. Inbound WhatsApp stops the loop when **Stop repeating when the contact
+sends a message** is checked (default).
+
 ## Timing accuracy
 
 - **Minutes / hours:** ~1 minute slack (cron tick).

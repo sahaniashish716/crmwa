@@ -995,15 +995,120 @@ function TriggerCard({
               />
             )}
             {type === "tag_added" && (
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                  Tag
-                </label>
-                <TagSelect
-                  value={(config.tag_id as string) ?? ""}
-                  onChange={(v) => onConfigChange({ ...config, tag_id: v })}
-                  t={t}
-                />
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                    Tag
+                  </label>
+                  <TagSelect
+                    value={(config.tag_id as string) ?? ""}
+                    onChange={(v) => onConfigChange({ ...config, tag_id: v })}
+                    t={t}
+                  />
+                </div>
+                <div className="rounded-md border border-border p-2 space-y-2">
+                  <label className="flex items-center gap-2 text-xs text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={
+                        (config.recurrence as { enabled?: boolean } | undefined)?.enabled ===
+                        true
+                      }
+                      onChange={(e) => {
+                        const rec = (config.recurrence as Record<string, unknown>) ?? {}
+                        onConfigChange({
+                          ...config,
+                          recurrence: {
+                            ...rec,
+                            enabled: e.target.checked,
+                            amount: rec.amount ?? 3,
+                            unit: rec.unit ?? "minutes",
+                            stop_on_inbound: rec.stop_on_inbound ?? true,
+                          },
+                        })
+                      }}
+                      className="rounded border-border"
+                    />
+                    {t("tagRecurrenceEnable")}
+                  </label>
+                  {(config.recurrence as { enabled?: boolean } | undefined)?.enabled ===
+                    true && (
+                    <>
+                      <div className="grid grid-cols-2 gap-2">
+                        <FieldBlock label={t("config.amountLabel")}>
+                          <Input
+                            type="number"
+                            min={1}
+                            value={
+                              Number(
+                                (config.recurrence as { amount?: number })?.amount ?? 3,
+                              )
+                            }
+                            onChange={(e) =>
+                              onConfigChange({
+                                ...config,
+                                recurrence: {
+                                  ...(config.recurrence as object),
+                                  enabled: true,
+                                  amount: Math.max(1, Number(e.target.value)),
+                                },
+                              })
+                            }
+                            className="bg-muted text-foreground"
+                          />
+                        </FieldBlock>
+                        <FieldBlock label={t("config.unitLabel")}>
+                          <select
+                            value={
+                              (config.recurrence as { unit?: string })?.unit ?? "minutes"
+                            }
+                            onChange={(e) =>
+                              onConfigChange({
+                                ...config,
+                                recurrence: {
+                                  ...(config.recurrence as object),
+                                  enabled: true,
+                                  unit: e.target.value,
+                                },
+                              })
+                            }
+                            className="w-full rounded-md border border-border bg-muted px-2 py-1.5 text-sm text-foreground"
+                          >
+                            <option value="minutes">{t("config.units.minutes")}</option>
+                            <option value="hours">{t("config.units.hours")}</option>
+                            <option value="days">{t("config.units.days")}</option>
+                            <option value="weeks">{t("config.units.weeks")}</option>
+                            <option value="months">{t("config.units.months")}</option>
+                          </select>
+                        </FieldBlock>
+                      </div>
+                      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={
+                            (config.recurrence as { stop_on_inbound?: boolean })
+                              ?.stop_on_inbound !== false
+                          }
+                          onChange={(e) =>
+                            onConfigChange({
+                              ...config,
+                              recurrence: {
+                                ...(config.recurrence as object),
+                                enabled: true,
+                                stop_on_inbound: e.target.checked,
+                              },
+                            })
+                          }
+                          className="rounded border-border"
+                        />
+                        {t("tagRecurrenceStopOnReply")}
+                      </label>
+                      <p className="text-[11px] text-muted-foreground">
+                        {t("tagRecurrenceHint")}
+                      </p>
+                    </>
+                  )}
+                </div>
               </div>
             )}
             {type === "time_based" && (
