@@ -24,7 +24,22 @@ export function tagRecurrenceStopsOnInbound(automation: Automation): boolean {
 }
 
 export function isRecurrenceTickContext(context: AutomationContext | undefined): boolean {
-  return Boolean(context?.vars?.[RECURRENCE_TICK_VAR])
+  const raw = context?.vars?.[RECURRENCE_TICK_VAR]
+  return raw === true || raw === 'true' || raw === 1
+}
+
+/** Wait rows always carry log_id; repeat ticks are enqueued with log_id null. */
+export function isRecurrencePendingRow(pending: {
+  log_id: string | null
+  parent_step_id: string | null
+  context?: AutomationContext
+}): boolean {
+  if (pending.log_id != null || pending.parent_step_id != null) return false
+  const ctx = pending.context as (AutomationContext & { _automation_pending_kind?: string }) | undefined
+  if (ctx?._automation_pending_kind === 'recurrence') return true
+  if (isRecurrenceTickContext(pending.context)) return true
+  // Fallback: only recurrence enqueue uses null log_id at root scope.
+  return true
 }
 
 /** Queue another full run after a successful completion. */
@@ -52,7 +67,8 @@ export async function scheduleTagRecurrenceIfConfigured(
         ...(context?.vars ?? {}),
         [RECURRENCE_TICK_VAR]: true,
       },
-    },
+      _automation_pending_kind: 'recurrence',
+    } as AutomationContext & { _automation_pending_kind?: string },
     cfg: interval,
   })
   if ('error' in result) {
@@ -79,7 +95,11 @@ export async function cancelRecurrenceForContact(
   }
 
   const tickRows = (data ?? []).filter((row) =>
-    Boolean((row.context as AutomationContext | null)?.vars?.[RECURRENCE_TICK_VAR]),
+    isRecurrencePendingRow({
+      log_id: row.log_id as string | null,
+      parent_step_id: row.parent_step_id as string | null,
+      context: row.context as AutomationContext,
+    }),
   )
   if (tickRows.length === 0) return
 

@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { tagRecurrenceInterval, isRecurrenceTickContext, RECURRENCE_TICK_VAR } from './recurrence'
+import {
+  tagRecurrenceInterval,
+  isRecurrenceTickContext,
+  isRecurrencePendingRow,
+  RECURRENCE_TICK_VAR,
+} from './recurrence'
 import type { Automation } from '@/types'
 
 describe('tag recurrence config', () => {
@@ -33,5 +38,29 @@ describe('tag recurrence config', () => {
       isRecurrenceTickContext({ vars: { [RECURRENCE_TICK_VAR]: true } }),
     ).toBe(true)
     expect(isRecurrenceTickContext({})).toBe(false)
+  })
+
+  it('detects recurrence pending rows by null log_id', () => {
+    expect(
+      isRecurrencePendingRow({
+        log_id: null,
+        parent_step_id: null,
+        context: { vars: { [RECURRENCE_TICK_VAR]: true } },
+      }),
+    ).toBe(true)
+    expect(
+      isRecurrencePendingRow({
+        log_id: 'log-1',
+        parent_step_id: null,
+        context: {},
+      }),
+    ).toBe(false)
+    expect(
+      isRecurrencePendingRow({
+        log_id: null,
+        parent_step_id: null,
+        context: {},
+      }),
+    ).toBe(true)
   })
 })
