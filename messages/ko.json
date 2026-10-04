@@ -1054,8 +1054,11 @@
         "units": {
           "minutes": "분",
           "hours": "시간",
-          "days": "일"
+          "days": "일",
+          "weeks": "주",
+          "months": "개월"
         },
+        "waitSchedulerHint": "태그/트리거 시점부터 예약됩니다. 긴 대기는 GitHub cron이 필요하며, 로그에 재개 시각(UTC)이 표시됩니다.",
         "subjectLabel": "대상",
         "subjects": {
           "tag_presence": "태그 존재 여부",

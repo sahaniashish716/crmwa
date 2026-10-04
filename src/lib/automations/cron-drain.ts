@@ -29,14 +29,8 @@ async function reclaimStaleRunningPending(admin: ReturnType<typeof supabaseAdmin
   }
 }
 
-export async function drainAutomationDueWork(
-  limit = 50,
-  /** When set, resume waits for this account first (tag/inbound piggyback). */
-  accountId?: string,
-): Promise<AutomationCronDrainResult> {
+async function fetchDuePending(limit: number, accountId?: string) {
   const admin = supabaseAdmin()
-  await reclaimStaleRunningPending(admin)
-
   let dueQuery = admin
     .from('automation_pending_executions')
     .select('*')
@@ -47,18 +41,14 @@ export async function drainAutomationDueWork(
   if (accountId) {
     dueQuery = dueQuery.eq('account_id', accountId)
   }
-  const { data: due, error } = await dueQuery
+  return dueQuery
+}
 
-  if (error) {
-    console.error('[automations] cron drain: pending fetch failed:', error)
-    return { processed: 0, scheduled: await runDueTimeBasedAutomations() }
-  }
-
-  if (!due || due.length === 0) {
-    const scheduled = await runDueTimeBasedAutomations()
-    return { processed: 0, scheduled }
-  }
-
+async function processPendingRows(
+  due: Record<string, unknown>[] | null,
+): Promise<number> {
+  if (!due || due.length === 0) return 0
+  const admin = supabaseAdmin()
   let processed = 0
   for (const row of due) {
     const { data: claim } = await admin
@@ -84,7 +74,29 @@ export async function drainAutomationDueWork(
     })
     processed++
   }
+  return processed
+}
 
+/** Resume due wait steps only (fast path for tag/inbound piggyback). */
+export async function drainAutomationPendingWaits(
+  limit = 100,
+  accountId?: string,
+): Promise<number> {
+  await reclaimStaleRunningPending(supabaseAdmin())
+  const { data: due, error } = await fetchDuePending(limit, accountId)
+  if (error) {
+    console.error('[automations] wait drain: pending fetch failed:', error)
+    return 0
+  }
+  return processPendingRows((due ?? []) as Record<string, unknown>[])
+}
+
+export async function drainAutomationDueWork(
+  limit = 100,
+  /** When set, resume waits for this account first (tag/inbound piggyback). */
+  accountId?: string,
+): Promise<AutomationCronDrainResult> {
+  const processed = await drainAutomationPendingWaits(limit, accountId)
   const scheduled = await runDueTimeBasedAutomations()
   return { processed, scheduled }
 }

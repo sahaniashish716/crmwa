@@ -1054,8 +1054,11 @@
         "units": {
           "minutes": "Minutes",
           "hours": "Hours",
-          "days": "Days"
+          "days": "Days",
+          "weeks": "Weeks",
+          "months": "Months"
         },
+        "waitSchedulerHint": "Scheduled from when the tag/trigger fires. Long waits (7–180 days) need GitHub cron enabled; the log shows the exact resume time (UTC).",
         "subjectLabel": "Subject",
         "subjects": {
           "tag_presence": "Tag presence",

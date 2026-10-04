@@ -102,6 +102,7 @@ vi.mock("./admin-client", () => {
     }
     if (table === "automation_pending_executions") {
       if (type === "insert") return { data: { id: "pending1" }, error: null };
+      if (type === "delete") return { data: null, error: null };
       return { data: null, error: null };
     }
     return { data: null, error: null };
@@ -161,6 +162,7 @@ vi.mock("@/lib/whatsapp/resolve-conversation", () => ({
 
 vi.mock("./cron-drain", () => ({
   drainAutomationDueWork: vi.fn(async () => ({ processed: 0, scheduled: 0 })),
+  drainAutomationPendingWaits: vi.fn(async () => 0),
   isAutomationCronConfigured: vi.fn(() => false),
 }));
 

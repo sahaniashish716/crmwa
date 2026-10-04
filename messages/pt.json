@@ -1054,8 +1054,11 @@
         "units": {
           "minutes": "Minutos",
           "hours": "Horas",
-          "days": "Dias"
+          "days": "Dias",
+          "weeks": "Semanas",
+          "months": "Meses"
         },
+        "waitSchedulerHint": "Agendado quando a tag dispara. Esperas longas exigem o cron do GitHub; o log mostra a hora exata (UTC).",
         "subjectLabel": "Assunto",
         "subjects": {
           "tag_presence": "Presença de tag",

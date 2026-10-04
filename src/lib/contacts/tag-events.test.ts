@@ -16,7 +16,7 @@ vi.mock('@/lib/automations/engine', () => ({
 const drainMock = vi.hoisted(() => vi.fn(async () => ({ processed: 0, scheduled: 0 })));
 
 vi.mock('@/lib/automations/cron-drain', () => ({
-  drainAutomationDueWork: drainMock,
+  drainAutomationPendingWaits: drainMock,
 }));
 
 import {

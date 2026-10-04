@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { processed, scheduled } = await drainAutomationDueWork(50)
+  const { processed, scheduled } = await drainAutomationDueWork(200)
   return NextResponse.json({ processed, scheduled })
 }
 

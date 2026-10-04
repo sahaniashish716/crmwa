@@ -150,11 +150,16 @@ function validateOne(step: StepLike, path: string, issues: ValidationIssue[]): v
     case 'wait':
       if (typeof c.amount !== 'number' || !Number.isFinite(c.amount) || c.amount <= 0) {
         issues.push({ path: `${path}.amount`, message: 'wait amount must be greater than 0' })
+      } else if (c.amount > 3650) {
+        issues.push({
+          path: `${path}.amount`,
+          message: 'wait amount is too large (max 3650 per unit)',
+        })
       }
-      if (!['minutes', 'hours', 'days'].includes(String(c.unit))) {
+      if (!['minutes', 'hours', 'days', 'weeks', 'months'].includes(String(c.unit))) {
         issues.push({
           path: `${path}.unit`,
-          message: 'wait unit must be minutes, hours, or days',
+          message: 'wait unit must be minutes, hours, days, weeks, or months',
         })
       }
       break

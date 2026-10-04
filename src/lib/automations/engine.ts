@@ -32,6 +32,11 @@ import {
   resolveTagIdForAccount,
   tagPresenceOperandRaw,
 } from './condition-tag-presence'
+import {
+  cancelPendingWaitsForContact,
+  enqueueAutomationWait,
+  formatWaitDetail,
+} from './wait-scheduler'
 
 // ------------------------------------------------------------
 // Public API
@@ -131,9 +136,9 @@ export async function runAutomationsForTrigger(input: DispatchInput): Promise<vo
     // Resume due waits before starting new runs (avoids stacking; clears waits
     // even when this trigger matches zero automations).
     if (input.triggerType !== 'time_based') {
-      const { drainAutomationDueWork } = await import('./cron-drain')
-      await drainAutomationDueWork(30, input.accountId).catch((err) =>
-        console.error('[automations] pre-dispatch cron drain failed:', err),
+      const { drainAutomationPendingWaits } = await import('./cron-drain')
+      await drainAutomationPendingWaits(100, input.accountId).catch((err) =>
+        console.error('[automations] pre-dispatch wait drain failed:', err),
       )
     }
 
@@ -236,6 +241,10 @@ export async function resumePendingExecution(pending: {
 
 async function executeAutomation(automation: Automation, input: DispatchInput) {
   const db = supabaseAdmin()
+
+  if (input.contactId) {
+    await cancelPendingWaitsForContact(automation.id, input.contactId)
+  }
 
   const { data: log, error: logErr } = await db
     .from('automation_logs')
@@ -340,31 +349,27 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<ExecuteOutcome> {
     // scope. The cron endpoint will pick it up later.
     if (step.step_type === 'wait') {
       const cfg = step.step_config as WaitStepConfig
-      const ms = waitMs(cfg)
-      const { error: pendingErr } = await db.from('automation_pending_executions').insert({
-        automation_id: args.automation.id,
-        // Tenancy: account_id required NOT NULL post-017.
-        account_id: args.automation.account_id,
-        user_id: args.automation.user_id,
-        contact_id: args.contactId,
-        log_id: args.logId,
-        parent_step_id: args.parentStepId,
+      const enqueued = await enqueueAutomationWait({
+        automationId: args.automation.id,
+        accountId: args.automation.account_id,
+        userId: args.automation.user_id,
+        contactId: args.contactId,
+        logId: args.logId,
+        parentStepId: args.parentStepId,
         branch: args.branch,
-        next_step_position: step.position + 1,
+        nextStepPosition: step.position + 1,
         context: args.context,
-        run_at: new Date(Date.now() + ms).toISOString(),
-        status: 'pending',
+        cfg,
       })
-      if (pendingErr) {
-        console.error('[automations] wait enqueue failed:', pendingErr)
+      if ('error' in enqueued) {
         results.push({
           step_id: step.id,
           step_type: step.step_type,
           status: 'failed',
-          detail: pendingErr.message,
+          detail: enqueued.error,
         })
         status = 'failed'
-        errorMessage = pendingErr.message
+        errorMessage = enqueued.error
         await appendResults(args.logId, results, status, errorMessage)
         return 'failed'
       }
@@ -372,7 +377,7 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<ExecuteOutcome> {
         step_id: step.id,
         step_type: step.step_type,
         status: 'success',
-        detail: `waiting ${cfg.amount} ${cfg.unit}`,
+        detail: formatWaitDetail(cfg),
       })
       status = 'partial'
       await appendResults(args.logId, results, status, errorMessage)
@@ -937,11 +942,6 @@ async function evaluateCondition(
     default:
       return { taken: false, detail: `branch=no; unknown subject=${subject}` }
   }
-}
-
-function waitMs(cfg: WaitStepConfig): number {
-  const unitMs = cfg.unit === 'days' ? 86_400_000 : cfg.unit === 'hours' ? 3_600_000 : 60_000
-  return Math.max(1_000, cfg.amount * unitMs)
 }
 
 function interpolate(s: string, args: ExecuteArgs): string {

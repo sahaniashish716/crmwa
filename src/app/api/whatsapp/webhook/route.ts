@@ -955,9 +955,9 @@ async function processMessage(
   }
 
   {
-    const { drainAutomationDueWork } = await import('@/lib/automations/cron-drain')
-    await drainAutomationDueWork(50, accountId).catch((err) =>
-      console.error('[automations] webhook cron drain failed:', err),
+    const { drainAutomationPendingWaits } = await import('@/lib/automations/cron-drain')
+    await drainAutomationPendingWaits(100, accountId).catch((err) =>
+      console.error('[automations] webhook wait drain failed:', err),
     )
   }
 

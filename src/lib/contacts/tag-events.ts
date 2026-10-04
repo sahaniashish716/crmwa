@@ -10,8 +10,8 @@ import { MAX_TAG_CHAIN_DEPTH, getTagChainDepth } from './tag-chain';
 export { MAX_TAG_CHAIN_DEPTH, getTagChainDepth } from './tag-chain';
 
 async function drainDueWaits(accountId: string): Promise<void> {
-  const { drainAutomationDueWork } = await import('@/lib/automations/cron-drain');
-  await drainAutomationDueWork(50, accountId).catch((err) =>
+  const { drainAutomationPendingWaits } = await import('@/lib/automations/cron-drain');
+  await drainAutomationPendingWaits(100, accountId).catch((err) =>
     console.error('[automations] tag-events drain failed:', err),
   );
 }

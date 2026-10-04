@@ -1054,8 +1054,11 @@
         "units": {
           "minutes": "Minutos",
           "hours": "Horas",
-          "days": "Días"
+          "days": "Días",
+          "weeks": "Semanas",
+          "months": "Meses"
         },
+        "waitSchedulerHint": "Se programa cuando se aplica la etiqueta. Las esperas largas requieren el cron de GitHub; el registro muestra la hora exacta (UTC).",
         "subjectLabel": "Sujeto",
         "subjects": {
           "tag_presence": "Presencia de etiqueta",

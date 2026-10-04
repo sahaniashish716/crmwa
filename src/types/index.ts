@@ -594,7 +594,7 @@ export interface CreateDealStepConfig {
 
 export interface WaitStepConfig {
   amount: number;
-  unit: 'minutes' | 'hours' | 'days';
+  unit: 'minutes' | 'hours' | 'days' | 'weeks' | 'months';
 }
 
 export type ConditionSubject =

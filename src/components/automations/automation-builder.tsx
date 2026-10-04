@@ -1621,8 +1621,13 @@ function StepEditor({
               <option value="minutes">{t("config.units.minutes")}</option>
               <option value="hours">{t("config.units.hours")}</option>
               <option value="days">{t("config.units.days")}</option>
+              <option value="weeks">{t("config.units.weeks")}</option>
+              <option value="months">{t("config.units.months")}</option>
             </select>
           </FieldBlock>
+          <p className="col-span-2 text-[11px] text-muted-foreground">
+            {t("config.waitSchedulerHint")}
+          </p>
         </div>
       )
     case "condition":
