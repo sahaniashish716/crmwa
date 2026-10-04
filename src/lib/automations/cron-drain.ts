@@ -31,17 +31,23 @@ async function reclaimStaleRunningPending(admin: ReturnType<typeof supabaseAdmin
 
 export async function drainAutomationDueWork(
   limit = 50,
+  /** When set, resume waits for this account first (tag/inbound piggyback). */
+  accountId?: string,
 ): Promise<AutomationCronDrainResult> {
   const admin = supabaseAdmin()
   await reclaimStaleRunningPending(admin)
 
-  const { data: due, error } = await admin
+  let dueQuery = admin
     .from('automation_pending_executions')
     .select('*')
     .eq('status', 'pending')
     .lte('run_at', new Date().toISOString())
     .order('run_at', { ascending: true })
     .limit(limit)
+  if (accountId) {
+    dueQuery = dueQuery.eq('account_id', accountId)
+  }
+  const { data: due, error } = await dueQuery
 
   if (error) {
     console.error('[automations] cron drain: pending fetch failed:', error)

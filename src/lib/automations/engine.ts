@@ -128,6 +128,15 @@ export async function runAutomationsForTrigger(input: DispatchInput): Promise<vo
       }
     }
 
+    // Resume due waits before starting new runs (avoids stacking; clears waits
+    // even when this trigger matches zero automations).
+    if (input.triggerType !== 'time_based') {
+      const { drainAutomationDueWork } = await import('./cron-drain')
+      await drainAutomationDueWork(30, input.accountId).catch((err) =>
+        console.error('[automations] pre-dispatch cron drain failed:', err),
+      )
+    }
+
     const { data: automations, error } = await db
       .from('automations')
       .select('*')
@@ -157,17 +166,6 @@ export async function runAutomationsForTrigger(input: DispatchInput): Promise<vo
       }
     }
 
-    // Resume due Wait steps (and time_based schedules) after contact-driven
-    // triggers. On Vercel Hobby there is often no minute-level cron; this
-    // piggyback clears waits when the account sees any automation traffic.
-    // External cron (see docs/automation-cron.md) remains required for idle
-    // accounts and sub-minute precision without inbound events.
-    if (input.triggerType !== 'time_based') {
-      const { drainAutomationDueWork } = await import('./cron-drain')
-      await drainAutomationDueWork(20).catch((err) =>
-        console.error('[automations] post-dispatch cron drain failed:', err),
-      )
-    }
   } catch (err) {
     console.error('[automations] dispatch failed:', err)
   }

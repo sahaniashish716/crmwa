@@ -9,6 +9,13 @@ import { MAX_TAG_CHAIN_DEPTH, getTagChainDepth } from './tag-chain';
 
 export { MAX_TAG_CHAIN_DEPTH, getTagChainDepth } from './tag-chain';
 
+async function drainDueWaits(accountId: string): Promise<void> {
+  const { drainAutomationDueWork } = await import('@/lib/automations/cron-drain');
+  await drainAutomationDueWork(50, accountId).catch((err) =>
+    console.error('[automations] tag-events drain failed:', err),
+  );
+}
+
 interface AddContactTagAndDispatchInput {
   db: SupabaseClient;
   accountId: string;
@@ -30,13 +37,18 @@ export interface AddContactTagResult {
 export async function addContactTagAndDispatch(
   input: AddContactTagAndDispatchInput
 ): Promise<AddContactTagResult> {
+  await drainDueWaits(input.accountId);
+
   const added = await addContactTagIfAbsent(input.db, {
     accountId: input.accountId,
     contactId: input.contactId,
     tagId: input.tagId,
   });
 
-  if (!added) return { added: false, dispatched: false, reason: 'duplicate' };
+  if (!added) {
+    await drainDueWaits(input.accountId);
+    return { added: false, dispatched: false, reason: 'duplicate' };
+  }
 
   const depth = getTagChainDepth(input.context);
   if (depth >= MAX_TAG_CHAIN_DEPTH) {
@@ -62,6 +74,8 @@ export async function addContactTagAndDispatch(
       },
     },
   });
+
+  await drainDueWaits(input.accountId);
 
   return { added: true, dispatched: true };
 }

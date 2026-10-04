@@ -33,6 +33,10 @@ Use this after deploy or when debugging “random” wait / schedule timing.
 - **Two automations for “message after 5 min”** — use **one** flow:
   `trigger → Wait 5 min → Send`.
 - **Cron not running** — GitHub log must show JSON, not “Skipping…”.
+- **Re-adding the same tag** does not re-run the automation, but it **does**
+  resume due Wait steps for that account. The first tag add still starts the run.
+- **Saving/activating an automation** does not send messages — only triggers
+  (tag, message, cron, etc.) do.
 
 ## Verify
 

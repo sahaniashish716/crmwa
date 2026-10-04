@@ -13,6 +13,12 @@ vi.mock('@/lib/automations/engine', () => ({
   runAutomationsForTrigger: mocks.dispatch,
 }));
 
+const drainMock = vi.hoisted(() => vi.fn(async () => ({ processed: 0, scheduled: 0 })));
+
+vi.mock('@/lib/automations/cron-drain', () => ({
+  drainAutomationDueWork: drainMock,
+}));
+
 import {
   addContactTagAndDispatch,
   getTagChainDepth,
@@ -30,6 +36,7 @@ beforeEach(() => {
   mocks.add.mockReset();
   mocks.dispatch.mockReset();
   mocks.dispatch.mockResolvedValue(undefined);
+  drainMock.mockClear();
 });
 
 describe('addContactTagAndDispatch', () => {
@@ -53,7 +60,7 @@ describe('addContactTagAndDispatch', () => {
     });
   });
 
-  it('does not dispatch when the tag already exists', async () => {
+  it('does not dispatch when the tag already exists but still drains due waits', async () => {
     mocks.add.mockResolvedValue(false);
 
     await expect(addContactTagAndDispatch(base)).resolves.toEqual({
@@ -62,6 +69,7 @@ describe('addContactTagAndDispatch', () => {
       reason: 'duplicate',
     });
     expect(mocks.dispatch).not.toHaveBeenCalled();
+    expect(drainMock).toHaveBeenCalled();
   });
 
   it('adds the tag but cuts a chain at the configured depth limit', async () => {

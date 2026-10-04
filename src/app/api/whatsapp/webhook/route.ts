@@ -954,6 +954,13 @@ async function processMessage(
     }).catch((err) => console.error('[automations] dispatch failed:', err))
   }
 
+  {
+    const { drainAutomationDueWork } = await import('@/lib/automations/cron-drain')
+    await drainAutomationDueWork(50, accountId).catch((err) =>
+      console.error('[automations] webhook cron drain failed:', err),
+    )
+  }
+
   // AI auto-reply. Runs only for plain-text inbound the deterministic
   // flow runner did NOT consume (flows win over the LLM), and only when
   // the account has enabled it. Awaited inside `after()` (same reason as
