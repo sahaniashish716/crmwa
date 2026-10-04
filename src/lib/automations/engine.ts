@@ -334,7 +334,7 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
     if (step.step_type === 'wait') {
       const cfg = step.step_config as WaitStepConfig
       const ms = waitMs(cfg)
-      await db.from('automation_pending_executions').insert({
+      const { error: pendingErr } = await db.from('automation_pending_executions').insert({
         automation_id: args.automation.id,
         // Tenancy: account_id required NOT NULL post-017.
         account_id: args.automation.account_id,
@@ -348,6 +348,19 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
         run_at: new Date(Date.now() + ms).toISOString(),
         status: 'pending',
       })
+      if (pendingErr) {
+        console.error('[automations] wait enqueue failed:', pendingErr)
+        results.push({
+          step_id: step.id,
+          step_type: step.step_type,
+          status: 'failed',
+          detail: pendingErr.message,
+        })
+        status = 'failed'
+        errorMessage = pendingErr.message
+        await appendResults(args.logId, results, status, errorMessage)
+        return
+      }
       results.push({
         step_id: step.id,
         step_type: step.step_type,

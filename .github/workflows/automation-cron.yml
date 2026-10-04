@@ -8,7 +8,8 @@ name: Automation cron drain
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    # Every minute — keeps 5-minute Wait steps closer to ~5–6 min (not ~10).
+    - cron: '*/1 * * * *'
   workflow_dispatch:
 
 jobs:

@@ -93,6 +93,33 @@ function matchesCron(fields: string[], timeZone: string, now: Date): boolean {
   )
 }
 
+// Every-N-minutes pattern: star-slash-N with all other cron fields wildcard.
+function parseEveryNMinutes(schedule: string): number | null {
+  const fields = schedule.trim().split(/\s+/).filter(Boolean)
+  if (fields.length !== 5) return null
+  const m = /^\*\/(\d+)$/.exec(fields[0])
+  if (!m || fields[1] !== '*' || fields[2] !== '*' || fields[3] !== '*' || fields[4] !== '*') {
+    return null
+  }
+  const n = Number(m[1])
+  if (!Number.isFinite(n) || n < 1 || n > 59) return null
+  return n
+}
+
+function isEveryNMinutesDue(
+  intervalMinutes: number,
+  lastExecutedAt: string | null | undefined,
+  now: Date,
+): boolean {
+  if (!lastExecutedAt) return true
+  const last = new Date(lastExecutedAt).getTime()
+  if (Number.isNaN(last)) return true
+  const elapsed = now.getTime() - last
+  // Small slack so a 1–5 min external cron still fires soon after the interval.
+  const dueMs = intervalMinutes * 60_000 - 20_000
+  return elapsed >= dueMs
+}
+
 /**
  * Returns true when `schedule` matches the current minute in `timezone`
  * and the automation has not already fired within the last ~55 seconds
@@ -113,6 +140,11 @@ export function isScheduleDue(
     if (!Number.isNaN(last) && now.getTime() - last < 55_000) {
       return false
     }
+  }
+
+  const everyN = parseEveryNMinutes(s)
+  if (everyN != null) {
+    return isEveryNMinutesDue(everyN, lastExecutedAt, now)
   }
 
   if (/^\d{1,2}:\d{2}$/.test(s)) {

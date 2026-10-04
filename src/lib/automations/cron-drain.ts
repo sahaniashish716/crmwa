@@ -14,10 +14,27 @@ export interface AutomationCronDrainResult {
  * Resume due wait steps and fire due time-based automations.
  * Shared by GET /api/automations/cron, webhook piggyback, and post-dispatch hooks.
  */
+const STALE_RUNNING_MS = 10 * 60_000
+
+/** Rows left `running` after a serverless timeout never resume without this. */
+async function reclaimStaleRunningPending(admin: ReturnType<typeof supabaseAdmin>) {
+  const staleBefore = new Date(Date.now() - STALE_RUNNING_MS).toISOString()
+  const { error } = await admin
+    .from('automation_pending_executions')
+    .update({ status: 'pending' })
+    .eq('status', 'running')
+    .lte('run_at', staleBefore)
+  if (error) {
+    console.error('[automations] cron drain: reclaim stale running failed:', error)
+  }
+}
+
 export async function drainAutomationDueWork(
   limit = 50,
 ): Promise<AutomationCronDrainResult> {
   const admin = supabaseAdmin()
+  await reclaimStaleRunningPending(admin)
+
   const { data: due, error } = await admin
     .from('automation_pending_executions')
     .select('*')
@@ -31,9 +48,8 @@ export async function drainAutomationDueWork(
     return { processed: 0, scheduled: await runDueTimeBasedAutomations() }
   }
 
-  const scheduled = await runDueTimeBasedAutomations()
-
   if (!due || due.length === 0) {
+    const scheduled = await runDueTimeBasedAutomations()
     return { processed: 0, scheduled }
   }
 
@@ -63,6 +79,7 @@ export async function drainAutomationDueWork(
     processed++
   }
 
+  const scheduled = await runDueTimeBasedAutomations()
   return { processed, scheduled }
 }
 
