@@ -84,7 +84,7 @@ export async function cancelRecurrenceForContact(
   const admin = supabaseAdmin()
   const { data, error } = await admin
     .from('automation_pending_executions')
-    .select('id, context, automation_id')
+    .select('id, context, automation_id, log_id, parent_step_id')
     .eq('account_id', accountId)
     .eq('contact_id', contactId)
     .eq('status', 'pending')
