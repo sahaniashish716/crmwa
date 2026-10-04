@@ -39,7 +39,7 @@ import {
 } from './wait-scheduler'
 import {
   RECURRENCE_TICK_VAR,
-  isRecurrenceTickContext,
+  isRecurrencePendingRow,
   scheduleTagRecurrenceIfConfigured,
 } from './recurrence'
 
@@ -217,7 +217,7 @@ export async function resumePendingExecution(pending: {
   }
 
   try {
-    if (isRecurrenceTickContext(pending.context)) {
+    if (isRecurrencePendingRow(pending)) {
       const ctx = pending.context ?? {}
       const vars = { ...(ctx.vars ?? {}) }
       delete vars[RECURRENCE_TICK_VAR]
