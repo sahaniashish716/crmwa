@@ -1,27 +1,19 @@
-import type { Automation, TagTriggerConfig, WaitStepConfig } from '@/types'
+import type { Automation } from '@/types'
 import type { AutomationContext } from './engine'
 import { supabaseAdmin } from './admin-client'
-import { computeWaitRunAt, enqueueAutomationWait } from './wait-scheduler'
+import { enqueueAutomationWait } from './wait-scheduler'
+import {
+  tagRecurrenceInterval,
+  tagRecurrenceStopsOnInbound,
+} from './tag-recurrence-config'
+
+export {
+  tagRecurrenceInterval,
+  tagRecurrenceStopsOnInbound,
+} from './tag-recurrence-config'
 
 /** Pending row marker: cron should start a fresh automation run. */
 export const RECURRENCE_TICK_VAR = '_automation_recurrence_tick'
-
-export function tagRecurrenceInterval(automation: Automation): WaitStepConfig | null {
-  if (automation.trigger_type !== 'tag_added') return null
-  const cfg = automation.trigger_config as TagTriggerConfig
-  const rec = cfg.recurrence
-  if (!rec || rec.enabled === false) return null
-  const amount = Number(rec.amount)
-  if (!Number.isFinite(amount) || amount <= 0) return null
-  const unit = rec.unit
-  if (!unit) return null
-  return { amount, unit }
-}
-
-export function tagRecurrenceStopsOnInbound(automation: Automation): boolean {
-  const cfg = automation.trigger_config as TagTriggerConfig
-  return cfg.recurrence?.stop_on_inbound !== false
-}
 
 export function isRecurrenceTickContext(context: AutomationContext | undefined): boolean {
   const raw = context?.vars?.[RECURRENCE_TICK_VAR]
@@ -48,14 +40,25 @@ export async function scheduleTagRecurrenceIfConfigured(
   contactId: string | null | undefined,
   context: AutomationContext | undefined,
 ): Promise<void> {
-  const interval = tagRecurrenceInterval(automation)
-  if (!interval || !contactId) return
+  if (!contactId) return
 
-  const runAt = computeWaitRunAt(interval)
+  const admin = supabaseAdmin()
+  const { data: fresh, error } = await admin
+    .from('automations')
+    .select('*')
+    .eq('id', automation.id)
+    .maybeSingle()
+  if (error) {
+    console.error('[automations] recurrence reload automation failed:', error)
+  }
+  const source = (fresh as Automation | null) ?? automation
+  const interval = tagRecurrenceInterval(source)
+  if (!interval) return
+
   const result = await enqueueAutomationWait({
-    automationId: automation.id,
-    accountId: automation.account_id,
-    userId: automation.user_id,
+    automationId: source.id,
+    accountId: source.account_id,
+    userId: source.user_id,
     contactId,
     logId: null,
     parentStepId: null,

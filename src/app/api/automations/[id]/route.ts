@@ -10,6 +10,7 @@ import {
   validateStepsForActivation,
   validateTriggerForActivation,
 } from '@/lib/automations/validate'
+import { prepareTagTriggerConfigForSave } from '@/lib/automations/tag-recurrence-config'
 
 // ------------------------------------------------------------
 // Tenancy note (GHSA-xvrq-88hg-44q6)
@@ -102,6 +103,23 @@ export async function PATCH(
     'is_active',
   ] as const) {
     if (k in body) update[k] = body[k]
+  }
+
+  const effectiveTriggerType = (update.trigger_type ?? existing.trigger_type) as string
+  if ('trigger_config' in update || Array.isArray(body.steps)) {
+    const mergedSteps = Array.isArray(body.steps)
+      ? (body.steps as { step_type: string; step_config: Record<string, unknown> }[])
+      : await loadStepsTree(id).then((tree) =>
+          tree.map((s) => ({
+            step_type: s.step_type,
+            step_config: s.step_config as Record<string, unknown>,
+          })),
+        )
+    update.trigger_config = prepareTagTriggerConfigForSave(
+      effectiveTriggerType,
+      (update.trigger_config ?? existing.trigger_config) as Record<string, unknown>,
+      mergedSteps,
+    )
   }
 
   // If this PATCH leaves the automation active (either explicitly
