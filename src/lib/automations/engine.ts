@@ -207,7 +207,7 @@ export async function resumePendingExecution(pending: {
   }
 
   try {
-    await executeStepsFrom({
+    const outcome = await executeStepsFrom({
       automation: automation as Automation,
       contactId: pending.contact_id,
       context: pending.context ?? {},
@@ -217,7 +217,15 @@ export async function resumePendingExecution(pending: {
       logId: pending.log_id,
       triggerEvent: 'resumed_wait',
     })
-    await markPending(pending.id, 'done')
+    await markPending(pending.id, outcome === 'failed' ? 'failed' : 'done')
+    if (outcome === 'completed') {
+      const { error: rpcErr } = await supabaseAdmin().rpc('increment_automation_execution_count', {
+        p_automation_id: pending.automation_id,
+      })
+      if (rpcErr) {
+        console.error('[automations] increment counter after resume failed:', rpcErr)
+      }
+    }
   } catch (err) {
     console.error('[automations] resume failed:', err)
     await markPending(pending.id, 'failed')
@@ -262,7 +270,7 @@ async function executeAutomation(automation: Automation, input: DispatchInput) {
     return
   }
 
-  await executeStepsFrom({
+  const outcome = await executeStepsFrom({
     automation,
     contactId: input.contactId ?? null,
     context: input.context ?? {},
@@ -273,15 +281,14 @@ async function executeAutomation(automation: Automation, input: DispatchInput) {
     triggerEvent: input.triggerType,
   })
 
-  // Atomic counter update via the SQL function from migration 007.
-  // Doing this with a client-side read-modify-write raced when the
-  // same automation fired for two contacts simultaneously — both
-  // would read N and both write N+1, losing one count permanently.
-  const { error: rpcErr } = await db.rpc('increment_automation_execution_count', {
-    p_automation_id: automation.id,
-  })
-  if (rpcErr) {
-    console.error('[automations] increment counter failed:', rpcErr)
+  // Count a finished run only when not parked on a wait (partial runs resume later).
+  if (outcome !== 'waiting') {
+    const { error: rpcErr } = await db.rpc('increment_automation_execution_count', {
+      p_automation_id: automation.id,
+    })
+    if (rpcErr) {
+      console.error('[automations] increment counter failed:', rpcErr)
+    }
   }
 }
 
@@ -296,7 +303,9 @@ interface ExecuteArgs {
   triggerEvent: string
 }
 
-async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
+type ExecuteOutcome = 'completed' | 'waiting' | 'failed'
+
+async function executeStepsFrom(args: ExecuteArgs): Promise<ExecuteOutcome> {
   const db = supabaseAdmin()
 
   const baseQuery = db
@@ -315,13 +324,13 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
 
   if (stepsErr) {
     await finalizeLog(args.logId, 'failed', stepsErr.message)
-    return
+    return 'failed'
   }
   if (!steps || steps.length === 0) {
     if (args.parentStepId === null && args.logId) {
       await finalizeLog(args.logId, 'success', null)
     }
-    return
+    return 'completed'
   }
 
   const results: AutomationLogStepResult[] = []
@@ -359,7 +368,7 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
         status = 'failed'
         errorMessage = pendingErr.message
         await appendResults(args.logId, results, status, errorMessage)
-        return
+        return 'failed'
       }
       results.push({
         step_id: step.id,
@@ -369,7 +378,7 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
       })
       status = 'partial'
       await appendResults(args.logId, results, status, errorMessage)
-      return
+      return 'waiting'
     }
 
     try {
@@ -384,13 +393,25 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
         })
         // Recurse into the chosen branch at position 0 (children use their
         // own ordering within the branch scope).
-        await executeStepsFrom({
+        const nested = await executeStepsFrom({
           ...args,
           parentStepId: step.id,
           branch: taken ? 'yes' : 'no',
           startPosition: 0,
           logId: args.logId,
         })
+        if (nested === 'waiting') {
+          if (args.parentStepId === null) {
+            await appendResults(args.logId, results, 'partial', errorMessage)
+          } else {
+            await appendResults(args.logId, results, null, errorMessage)
+          }
+          return 'waiting'
+        }
+        if (nested === 'failed') {
+          status = 'failed'
+          break
+        }
         continue
       }
 
@@ -421,6 +442,7 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
     // Nested branch — just append results; parent scope decides final status.
     await appendResults(args.logId, results, null, errorMessage)
   }
+  return status === 'failed' ? 'failed' : 'completed'
 }
 
 async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string> {

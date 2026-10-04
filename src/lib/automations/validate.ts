@@ -27,7 +27,23 @@ interface StepLike {
   branches?: { yes?: StepLike[]; no?: StepLike[] }
 }
 
-export function validateStepsForActivation(steps: StepLike[]): ValidationIssue[] {
+const CONTACT_REQUIRED_STEP_TYPES = new Set([
+  'send_message',
+  'send_template',
+  'send_buttons',
+  'send_list',
+  'add_tag',
+  'remove_tag',
+  'assign_conversation',
+  'update_contact_field',
+  'create_deal',
+  'close_conversation',
+])
+
+export function validateStepsForActivation(
+  steps: StepLike[],
+  options?: { triggerType?: AutomationTriggerType },
+): ValidationIssue[] {
   const issues: ValidationIssue[] = []
   if (!Array.isArray(steps) || steps.length === 0) {
     issues.push({
@@ -37,7 +53,31 @@ export function validateStepsForActivation(steps: StepLike[]): ValidationIssue[]
     return issues
   }
   walk(steps, '', issues)
+  if (options?.triggerType === 'time_based') {
+    walkTimeBasedContactRequirement(steps, '', issues)
+  }
   return issues
+}
+
+function walkTimeBasedContactRequirement(
+  steps: StepLike[],
+  prefix: string,
+  issues: ValidationIssue[],
+): void {
+  steps.forEach((s, i) => {
+    const path = `${prefix}steps[${i}]`
+    if (CONTACT_REQUIRED_STEP_TYPES.has(s.step_type)) {
+      issues.push({
+        path,
+        message:
+          'time-based automations cannot run contact steps (no contact on schedule) — use a message/tag trigger instead',
+      })
+    }
+    if (s.step_type === 'condition' && s.branches) {
+      if (s.branches.yes) walkTimeBasedContactRequirement(s.branches.yes, `${path}.yes.`, issues)
+      if (s.branches.no) walkTimeBasedContactRequirement(s.branches.no, `${path}.no.`, issues)
+    }
+  })
 }
 
 function walk(steps: StepLike[], prefix: string, issues: ValidationIssue[]): void {

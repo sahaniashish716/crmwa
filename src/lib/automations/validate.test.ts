@@ -207,6 +207,25 @@ describe("validateStepsForActivation", () => {
   });
 });
 
+describe("validateStepsForActivation — time_based", () => {
+  it("rejects contact steps on time-based triggers", () => {
+    const issues = validateStepsForActivation(
+      [{ step_type: "send_message", step_config: { text: "hi" } }],
+      { triggerType: "time_based" },
+    );
+    expect(issues.length).toBeGreaterThan(0);
+    expect(issues[0].message).toMatch(/time-based/i);
+  });
+
+  it("allows send_webhook on time-based triggers", () => {
+    const issues = validateStepsForActivation(
+      [{ step_type: "send_webhook", step_config: { url: "https://example.com/hook" } }],
+      { triggerType: "time_based" },
+    );
+    expect(issues.filter((i) => i.message.includes("time-based"))).toHaveLength(0);
+  });
+});
+
 describe("validateTriggerForActivation", () => {
   it("accepts a valid keyword_match config", () => {
     expect(

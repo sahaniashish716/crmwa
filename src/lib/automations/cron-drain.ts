@@ -14,7 +14,7 @@ export interface AutomationCronDrainResult {
  * Resume due wait steps and fire due time-based automations.
  * Shared by GET /api/automations/cron, webhook piggyback, and post-dispatch hooks.
  */
-const STALE_RUNNING_MS = 10 * 60_000
+const STALE_RUNNING_MS = 30 * 60_000
 
 /** Rows left `running` after a serverless timeout never resume without this. */
 async function reclaimStaleRunningPending(admin: ReturnType<typeof supabaseAdmin>) {

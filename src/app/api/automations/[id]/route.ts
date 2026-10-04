@@ -118,7 +118,9 @@ export async function PATCH(
       : await loadStepsTree(id)
     const issues = [
       ...validateTriggerForActivation(mergedTriggerType, mergedTriggerConfig),
-      ...validateStepsForActivation(mergedSteps),
+      ...validateStepsForActivation(mergedSteps, {
+        triggerType: mergedTriggerType as import('@/types').AutomationTriggerType,
+      }),
     ]
     if (issues.length > 0) {
       return NextResponse.json(

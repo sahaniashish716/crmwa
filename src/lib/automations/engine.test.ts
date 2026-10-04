@@ -100,6 +100,10 @@ vi.mock("./admin-client", () => {
       if (idFilter) return { data: state.tagById, error: null };
       return { data: state.tagByName, error: null };
     }
+    if (table === "automation_pending_executions") {
+      if (type === "insert") return { data: { id: "pending1" }, error: null };
+      return { data: null, error: null };
+    }
     return { data: null, error: null };
   }
 
@@ -482,6 +486,52 @@ describe("triggerMatches — interactive_reply", () => {
   it("does not match when no reply id is present or config is empty", () => {
     expect(triggerMatches(automation(["yes"]), {})).toBe(false);
     expect(triggerMatches(automation([]), { interactive_reply_id: "yes" })).toBe(false);
+  });
+});
+
+describe("runAutomationsForTrigger — wait in condition branch", () => {
+  it("keeps log status partial when wait is inside a condition branch", async () => {
+    h.state.owned = { id: "c1" };
+    h.state.automations = [{
+      id: "a1",
+      account_id: ACCOUNT,
+      user_id: "u1",
+      name: "branch wait",
+      trigger_type: "tag_added",
+      trigger_config: { tag_id: "t1" },
+      is_active: true,
+    }];
+    h.state.steps = [
+      {
+        id: "cond",
+        automation_id: "a1",
+        step_type: "condition",
+        position: 0,
+        parent_step_id: null,
+        step_config: { subject: "message_content", value: "x" },
+      },
+      {
+        id: "wait1",
+        automation_id: "a1",
+        step_type: "wait",
+        position: 0,
+        parent_step_id: "cond",
+        branch: "yes",
+        step_config: { amount: 5, unit: "minutes" },
+      },
+    ];
+    h.state.contactTagCount = 0;
+
+    await runAutomationsForTrigger({
+      accountId: ACCOUNT,
+      triggerType: "tag_added",
+      contactId: "c1",
+      context: { tag_id: "t1", message_text: "hello x world" },
+    });
+
+    const statusUpdates = h.state.logUpdates.filter((u) => "status" in u);
+    expect(statusUpdates.some((u) => u.status === "partial")).toBe(true);
+    expect(statusUpdates.some((u) => u.status === "success")).toBe(false);
   });
 });
 
