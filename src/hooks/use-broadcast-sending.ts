@@ -8,6 +8,11 @@ import {
   batchRetryDelayMs,
 } from '@/lib/broadcast-retry';
 import { normalizeKey } from '@/lib/contacts/dedupe';
+import {
+  BROADCAST_TEMPLATE_PARAMS_MIGRATION_HINT,
+  isMissingBroadcastTemplateParamsColumn,
+  recipientParamsForSend,
+} from '@/lib/broadcast/template-params-schema';
 import { Contact, MessageTemplate } from '@/types';
 
 export type CustomFieldOperator = 'is' | 'is_not' | 'contains';
@@ -439,11 +444,29 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         template_params: paramsByContact.get(contact.id) ?? [],
       }));
 
+      let persistTemplateParamsOnRecipients = true;
       for (let i = 0; i < recipientRows.length; i += INSERT_BATCH_SIZE) {
         const batch = recipientRows.slice(i, i + INSERT_BATCH_SIZE);
-        const { error: recipientError } = await supabase
-          .from('broadcast_recipients')
-          .insert(batch);
+        const rowsForInsert = persistTemplateParamsOnRecipients
+          ? batch
+          : batch.map(({ template_params: _tp, ...row }) => row);
+
+        let recipientError = (
+          await supabase.from('broadcast_recipients').insert(rowsForInsert)
+        ).error;
+
+        if (
+          recipientError &&
+          persistTemplateParamsOnRecipients &&
+          isMissingBroadcastTemplateParamsColumn(recipientError.message)
+        ) {
+          persistTemplateParamsOnRecipients = false;
+          const retryRows = batch.map(({ template_params: _tp, ...row }) => row);
+          recipientError = (
+            await supabase.from('broadcast_recipients').insert(retryRows)
+          ).error;
+        }
+
         if (recipientError) {
           // Previous impl logged and marched on — the broadcast then ran
           // with an incomplete recipient set, so webhook status updates
@@ -457,8 +480,11 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
               failed_count: contacts.length,
             })
             .eq('id', broadcast.id);
+          const hint = isMissingBroadcastTemplateParamsColumn(recipientError.message)
+            ? ` ${BROADCAST_TEMPLATE_PARAMS_MIGRATION_HINT}`
+            : '';
           throw new Error(
-            `Failed to insert recipient batch ${i / INSERT_BATCH_SIZE + 1}: ${recipientError.message}`,
+            `Failed to insert recipient batch ${i / INSERT_BATCH_SIZE + 1}: ${recipientError.message}${hint}`,
           );
         }
       }
@@ -499,7 +525,11 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
             phone: r.contact!.phone as string,
             // Read back off the row rather than re-resolved, so this
             // pass and any later resume send identical params.
-            params: Array.isArray(r.template_params) ? r.template_params : [],
+            params: recipientParamsForSend(
+              r.contact_id as string | undefined,
+              paramsByContact,
+              r.template_params,
+            ),
             ...(messageParams ? { messageParams } : {}),
           }));
 
