@@ -326,6 +326,34 @@ export function MessageThread({
     // was disconnected or throttled are otherwise lost.
   }, [conversationId, resyncToken]);
 
+  // Fallback when Realtime misses an INSERT (common on mobile / sleep).
+  useEffect(() => {
+    if (!conversationId) return;
+    const POLL_MS = 20_000;
+    const supabase = createClient();
+    let cancelled = false;
+
+    const poll = async () => {
+      if (document.visibilityState !== "visible") return;
+      const { data, error } = await supabase
+        .from("messages")
+        .select("*")
+        .eq("conversation_id", conversationId)
+        .order("created_at", { ascending: true });
+      if (cancelled || error || !data) return;
+      onMessagesLoadedRef.current(data);
+    };
+
+    const timer = setInterval(() => {
+      void poll();
+    }, POLL_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [conversationId]);
+
   // Reactions fetch — pulls the current state from the DB. Kept separate
   // from the channel subscription below so a `resyncToken` bump just
   // refetches the rows without also tearing down and rebuilding the

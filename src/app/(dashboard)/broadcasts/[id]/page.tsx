@@ -36,6 +36,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { BroadcastRecipientError } from '@/components/broadcasts/broadcast-recipient-error';
 import {
   getBroadcastStatus,
   getRecipientStatus,
@@ -624,8 +625,8 @@ export default function BroadcastDetailPage() {
                           ? new Date(recipient.read_at).toLocaleString()
                           : '-'}
                       </TableCell>
-                      <TableCell className="max-w-xs truncate text-xs text-red-400">
-                        {recipient.error_message ?? '-'}
+                      <TableCell>
+                        <BroadcastRecipientError errorMessage={recipient.error_message} />
                       </TableCell>
                     </TableRow>
                   );

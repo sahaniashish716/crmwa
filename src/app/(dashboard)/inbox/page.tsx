@@ -218,11 +218,18 @@ function InboxPageInner() {
       const newMsg = event.new;
 
       if (event.eventType === "INSERT") {
+        const isActiveThread =
+          activeConversation?.id === newMsg.conversation_id;
+
+        if (!isActiveThread && newMsg.sender_type === "customer") {
+          const preview =
+            newMsg.content_text?.trim().slice(0, 80) ||
+            `[${newMsg.content_type}]`;
+          toast.message("New WhatsApp message", { description: preview });
+        }
+
         // Add to messages if it belongs to active conversation
-        if (
-          activeConversation &&
-          newMsg.conversation_id === activeConversation.id
-        ) {
+        if (activeConversation && isActiveThread) {
           setMessages((prev) => {
             // Avoid duplicates
             if (prev.some((m) => m.id === newMsg.id)) return prev;
@@ -388,6 +395,17 @@ function InboxPageInner() {
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
     };
+  }, []);
+
+  // Periodic list refresh when Realtime drops events (webhook still persisted).
+  useEffect(() => {
+    const LIST_POLL_MS = 30_000;
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        setResyncToken((n) => n + 1);
+      }
+    }, LIST_POLL_MS);
+    return () => clearInterval(timer);
   }, []);
 
   /**
