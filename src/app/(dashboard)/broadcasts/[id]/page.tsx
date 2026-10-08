@@ -36,7 +36,6 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { BroadcastRecipientError } from '@/components/broadcasts/broadcast-recipient-error';
 import {
   getBroadcastStatus,
   getRecipientStatus,
@@ -79,10 +78,11 @@ interface FunnelStep {
  * always render a full bar at the top and proportional tails.
  */
 function FunnelChart({ steps }: { steps: FunnelStep[] }) {
+  const t = useTranslations('Broadcasts.detail');
   const max = Math.max(...steps.map((s) => s.value), 1);
   return (
     <div className="rounded-xl border border-border bg-card p-4">
-      <h3 className="mb-4 text-sm font-medium text-foreground">Funnel</h3>
+      <h3 className="mb-4 text-sm font-medium text-foreground">{t('funnel')}</h3>
       <div className="space-y-2">
         {steps.map((step) => {
           const pctOfMax = Math.max(5, Math.round((step.value / max) * 100));
@@ -271,7 +271,7 @@ export default function BroadcastDetailPage() {
     } catch (err) {
       toast.error(
         t('toastResumeFailed', {
-          error: err instanceof Error ? err.message : 'Unknown error',
+          error: err instanceof Error ? err.message : t('unknownError'),
         }),
       );
     } finally {
@@ -598,7 +598,7 @@ export default function BroadcastDetailPage() {
                   return (
                     <TableRow key={recipient.id} className="border-border">
                       <TableCell className="font-medium text-foreground">
-                        {recipient.contact?.name ?? 'Unknown'}
+                        {recipient.contact?.name ?? t('unknownContact')}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {recipient.contact?.phone ?? '-'}
@@ -625,8 +625,8 @@ export default function BroadcastDetailPage() {
                           ? new Date(recipient.read_at).toLocaleString()
                           : '-'}
                       </TableCell>
-                      <TableCell>
-                        <BroadcastRecipientError errorMessage={recipient.error_message} />
+                      <TableCell className="max-w-xs truncate text-xs text-red-400">
+                        {recipient.error_message ?? '-'}
                       </TableCell>
                     </TableRow>
                   );

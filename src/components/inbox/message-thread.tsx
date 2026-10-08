@@ -326,34 +326,6 @@ export function MessageThread({
     // was disconnected or throttled are otherwise lost.
   }, [conversationId, resyncToken]);
 
-  // Fallback when Realtime misses an INSERT (common on mobile / sleep).
-  useEffect(() => {
-    if (!conversationId) return;
-    const POLL_MS = 20_000;
-    const supabase = createClient();
-    let cancelled = false;
-
-    const poll = async () => {
-      if (document.visibilityState !== "visible") return;
-      const { data, error } = await supabase
-        .from("messages")
-        .select("*")
-        .eq("conversation_id", conversationId)
-        .order("created_at", { ascending: true });
-      if (cancelled || error || !data) return;
-      onMessagesLoadedRef.current(data);
-    };
-
-    const timer = setInterval(() => {
-      void poll();
-    }, POLL_MS);
-
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [conversationId]);
-
   // Reactions fetch — pulls the current state from the DB. Kept separate
   // from the channel subscription below so a `resyncToken` bump just
   // refetches the rows without also tearing down and rebuilding the
@@ -541,7 +513,7 @@ export function MessageThread({
         onUpdateMessage(tempId, { status: "sent" });
       } catch (err) {
         console.error("Failed to send message:", err);
-        const reason = err instanceof Error ? err.message : "network error";
+        const reason = err instanceof Error ? err.message : t("networkError");
         toast.error(t("sendFailed", { reason }));
         onUpdateMessage(tempId, { status: "failed" });
       }
@@ -558,7 +530,7 @@ export function MessageThread({
       // kinds use the caption as-is. Audio carries no caption.
       const contentText =
         payload.kind === "document"
-          ? payload.caption || payload.filename || "Document"
+          ? payload.caption || payload.filename || t("documentFallback")
           : payload.caption;
 
       const tempId = `temp-${Date.now()}`;
@@ -606,7 +578,7 @@ export function MessageThread({
         onUpdateMessage(tempId, { status: "sent" });
       } catch (err) {
         console.error("Failed to send media:", err);
-        const reason = err instanceof Error ? err.message : "network error";
+        const reason = err instanceof Error ? err.message : t("networkError");
         toast.error(t("sendFailed", { reason }));
         onUpdateMessage(tempId, { status: "failed" });
         void deleteAccountMedia(CHAT_MEDIA_BUCKET, payload.path).catch(() => {});
@@ -660,7 +632,7 @@ export function MessageThread({
         onUpdateMessage(tempId, { status: "sent" });
       } catch (err) {
         console.error("Failed to send interactive message:", err);
-        const reason = err instanceof Error ? err.message : "network error";
+        const reason = err instanceof Error ? err.message : t("networkError");
         toast.error(t("sendFailed", { reason }));
         onUpdateMessage(tempId, { status: "failed" });
       }
@@ -749,7 +721,7 @@ export function MessageThread({
         onUpdateMessage(tempId, { status: "sent" });
       } catch (err) {
         console.error("Failed to send template:", err);
-        const reason = err instanceof Error ? err.message : "network error";
+        const reason = err instanceof Error ? err.message : t("networkError");
         toast.error(t("sendTemplateFailed", { reason }));
         onUpdateMessage(tempId, { status: "failed" });
       }
@@ -789,9 +761,9 @@ export function MessageThread({
     (m: Message): string => {
       const isAgentMsg =
         m.sender_type === "agent" || m.sender_type === "bot";
-      return isAgentMsg ? "You" : contactDisplayName;
+      return isAgentMsg ? t("you") : contactDisplayName;
     },
-    [contactDisplayName],
+    [contactDisplayName, t],
   );
 
   const handleStartReply = useCallback(
@@ -861,7 +833,7 @@ export function MessageThread({
           throw new Error(payload?.error || `HTTP ${res.status}`);
         }
       } catch (err) {
-        const reason = err instanceof Error ? err.message : "network error";
+        const reason = err instanceof Error ? err.message : t("networkError");
         toast.error(t("reactionFailed", { reason }));
         setReactions(snapshot);
       }
@@ -873,18 +845,14 @@ export function MessageThread({
     async (agentId: string | null) => {
       if (!conversation) return;
 
-      try {
-        const res = await fetch(`/api/conversations/${conversation.id}/assign`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ assigned_agent_id: agentId }),
-        });
-        if (!res.ok) {
-          const payload = await res.json().catch(() => ({}));
-          throw new Error(payload?.error || `HTTP ${res.status}`);
-        }
-      } catch (err) {
-        console.error("Failed to update assignment:", err);
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("conversations")
+        .update({ assigned_agent_id: agentId })
+        .eq("id", conversation.id);
+
+      if (error) {
+        console.error("Failed to update assignment:", error);
         toast.error(t("assignmentUpdateFailed"));
         return;
       }
