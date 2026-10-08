@@ -62,13 +62,20 @@ export async function GET(request: Request) {
           conversation_id: lastInbound.conversation_id,
         }
       : null,
+    meta_webhook_checklist: [
+      'Callback URL must be https://<your-domain>/api/whatsapp/webhook',
+      'Subscribe to the messages field (not statuses alone)',
+      'Verify token must match Settings → WhatsApp',
+      'META_APP_SECRET on Vercel must match the Meta app that owns this WABA',
+      `Stored phone_number_id: ${waConfig?.phone_number_id ?? '(none)'} — must match Meta webhook metadata`,
+    ],
     hints: [
       !metaSecretConfigured &&
         'Set META_APP_SECRET on Vercel — without it webhook POST returns 401 and Meta stops sending inbound events.',
       waConfig?.status !== 'connected' &&
         'Connect WhatsApp in Settings; inbound routing uses phone_number_id from whatsapp_config.',
       !lastInbound &&
-        'No customer messages in DB for this account yet — if you already replied on WhatsApp, Meta webhook is not reaching this app or phone_number_id mismatch.',
+        'No customer messages in DB — usual causes: wrong META_APP_SECRET (401), messages webhook field not subscribed, or phone_number_id mismatch (now auto-synced from WABA when possible).',
     ].filter(Boolean),
   })
 }

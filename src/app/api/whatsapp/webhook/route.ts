@@ -14,6 +14,7 @@ import {
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe'
 import { reopenClosedConversation } from '@/lib/conversations/reopen'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
+import { resolveWhatsappConfigForInbound } from '@/lib/whatsapp/webhook-config'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
@@ -301,46 +302,17 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
       // may omit it on some payloads — identity still comes from messages[].from).
       if (!value.messages?.length) continue
 
-      const phoneNumberId = value.metadata.phone_number_id
-
-      // Find user's config by phone_number_id. `.single()` returns
-      // PGRST116 for both 0 rows AND ≥2 rows — distinguish them so
-      // operators see the real cause in logs. ≥2 rows shouldn't happen
-      // post-migration 013 (UNIQUE constraint), but a row created
-      // before the constraint, or a race, would still surface here.
-      const { data: configRows, error: configError } = await supabaseAdmin()
-        .from('whatsapp_config')
-        .select('*')
-        .eq('phone_number_id', phoneNumberId)
-
-      if (configError) {
-        console.error(
-          'Error fetching whatsapp_config for phone_number_id:',
-          phoneNumberId,
-          configError
-        )
+      const phoneNumberId = value.metadata?.phone_number_id
+      const config = await resolveWhatsappConfigForInbound(
+        supabaseAdmin(),
+        phoneNumberId,
+        entry.id,
+      )
+      if (!config) {
         continue
       }
 
-      if (!configRows || configRows.length === 0) {
-        console.error('No config found for phone_number_id:', phoneNumberId)
-        continue
-      }
-
-      if (configRows.length > 1) {
-        console.error(
-          `Multiple configs (${configRows.length}) found for phone_number_id:`,
-          phoneNumberId,
-          '— inbound message dropped. Resolve duplicates so each number maps to a single account.',
-          'Account owners:',
-          configRows.map((r: { account_id: string; user_id: string }) => `${r.account_id} (admin ${r.user_id})`)
-        )
-        continue
-      }
-
-      const config = configRows[0]
-
-      const decryptedAccessToken = decrypt(config.access_token)
+      const decryptedAccessToken = decrypt(String(config.access_token ?? ''))
 
       const contactList = value.contacts ?? []
 
@@ -356,11 +328,11 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
           contact,
           // Tenancy — drives every contact / conversation lookup
           // and the engines' active-row dispatch.
-          config.account_id,
+          String(config.account_id),
           // Audit / sender-of-record — used as the user_id on row
           // inserts that need it for NOT NULL FK compliance. Always
           // the admin who saved the WhatsApp config.
-          config.user_id,
+          String(config.user_id),
           decryptedAccessToken,
           // Default ON: the column is NOT NULL DEFAULT TRUE, but a row
           // read before migration 039 lands would have it undefined,
