@@ -358,12 +358,31 @@ export function ImportModal({
       // 5) Wire tags onto the contacts we just created. Failure here must
       //    not mask a successful contact import.
       let tagsAssigned = 0;
+      const automationPairs: { contact_id: string; tag_id: string }[] = [];
       try {
         tagsAssigned = await assignImportedContactTags(
           supabase,
           tagAssignments,
           tagIdByKey
         );
+        for (const { contactId, tagNames } of tagAssignments) {
+          const seen = new Set<string>();
+          for (const name of tagNames) {
+            const tagId = tagIdByKey.get(name.trim().toLowerCase());
+            if (!tagId || seen.has(tagId)) continue;
+            seen.add(tagId);
+            automationPairs.push({ contact_id: contactId, tag_id: tagId });
+          }
+        }
+        if (automationPairs.length > 0) {
+          await fetch('/api/contacts/import/dispatch-tag-automations', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ pairs: automationPairs }),
+          }).catch(() => {
+            toast.warning(t('toastTagsWarning'));
+          });
+        }
       } catch {
         toast.warning(t('toastTagsWarning'));
       }

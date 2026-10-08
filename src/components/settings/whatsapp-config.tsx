@@ -875,6 +875,37 @@ export function WhatsAppConfig() {
                   <Copy className="size-4" />
                 </Button>
               </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-2 border-border text-muted-foreground"
+                onClick={async () => {
+                  try {
+                    const res = await fetch('/api/whatsapp/inbound-health');
+                    const body = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                      toast.error(body?.error ?? 'Inbound health check failed');
+                      return;
+                    }
+                    if (body.ok) {
+                      toast.success('Inbound webhook path looks configured', {
+                        description: body.last_customer_message?.at
+                          ? `Last customer message: ${body.last_customer_message.at}`
+                          : 'No customer messages in CRM yet — send a test reply from a phone.',
+                      });
+                    } else {
+                      toast.warning('Inbound may not work yet', {
+                        description: (body.hints as string[])?.[0] ?? 'See checklist in docs.',
+                      });
+                    }
+                  } catch {
+                    toast.error('Could not run inbound health check');
+                  }
+                }}
+              >
+                Check inbound / Inbox path
+              </Button>
             </div>
           </CardContent>
         </Card>
