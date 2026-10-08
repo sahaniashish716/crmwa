@@ -238,7 +238,7 @@ export function validateTriggerForActivation(
     const rec = cfg.recurrence as
       | { enabled?: boolean; amount?: unknown; unit?: unknown; stop_on_inbound?: boolean }
       | undefined
-    if (rec && rec.enabled !== false) {
+    if (rec?.enabled === true) {
       const amount = Number(rec.amount)
       if (!Number.isFinite(amount) || amount <= 0) {
         issues.push({

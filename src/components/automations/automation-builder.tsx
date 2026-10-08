@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react"
 import { useRouter } from "next/navigation"
+import { prepareTagTriggerConfigForSave } from "@/lib/automations/tag-recurrence-config"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 import {
@@ -785,8 +786,13 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
   async function save() {
     setSaving(true)
     try {
-      const trigger_config =
+      let trigger_config =
         triggerConfigFlushRef.current?.() ?? state.trigger_config
+      trigger_config = prepareTagTriggerConfigForSave(
+        state.trigger_type,
+        trigger_config,
+        toApiSteps(state.steps),
+      ) as Record<string, unknown>
       if (trigger_config !== state.trigger_config) {
         setState((s) => ({ ...s, trigger_config }))
       }
@@ -882,6 +888,7 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
             <TriggerCard
               type={state.trigger_type}
               config={state.trigger_config}
+              rootSteps={state.steps}
               onTypeChange={(tVal) => patchTop("trigger_type", tVal)}
               onConfigChange={(c) => patchTop("trigger_config", c)}
               registerTriggerConfigFlush={(fn) => {
@@ -911,9 +918,20 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
 // Trigger card
 // ------------------------------------------------------------
 
+function firstRootWaitInterval(
+  steps: BuilderStep[],
+): { amount: number; unit: string } | null {
+  const wait = steps.find((s) => s.step_type === "wait")
+  if (!wait) return null
+  const amount = Math.max(1, Math.floor(Number(wait.step_config.amount) || 1))
+  const unit = String(wait.step_config.unit ?? "minutes")
+  return { amount, unit }
+}
+
 function TriggerCard({
   type,
   config,
+  rootSteps,
   onTypeChange,
   onConfigChange,
   registerTriggerConfigFlush,
@@ -921,6 +939,7 @@ function TriggerCard({
 }: {
   type: AutomationTriggerType
   config: Record<string, unknown>
+  rootSteps: BuilderStep[]
   onTypeChange: (t: AutomationTriggerType) => void
   onConfigChange: (c: Record<string, unknown>) => void
   registerTriggerConfigFlush: (fn: () => Record<string, unknown>) => void
@@ -1016,13 +1035,14 @@ function TriggerCard({
                       }
                       onChange={(e) => {
                         const rec = (config.recurrence as Record<string, unknown>) ?? {}
+                        const fromWait = firstRootWaitInterval(rootSteps)
                         onConfigChange({
                           ...config,
                           recurrence: {
                             ...rec,
                             enabled: e.target.checked,
-                            amount: rec.amount ?? 3,
-                            unit: rec.unit ?? "minutes",
+                            amount: rec.amount ?? fromWait?.amount ?? 1,
+                            unit: rec.unit ?? fromWait?.unit ?? "minutes",
                             stop_on_inbound: rec.stop_on_inbound ?? true,
                           },
                         })
@@ -1041,7 +1061,9 @@ function TriggerCard({
                             min={1}
                             value={
                               Number(
-                                (config.recurrence as { amount?: number })?.amount ?? 3,
+                                (config.recurrence as { amount?: number })?.amount ??
+                                  firstRootWaitInterval(rootSteps)?.amount ??
+                                  1,
                               )
                             }
                             onChange={(e) =>

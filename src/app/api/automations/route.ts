@@ -8,6 +8,7 @@ import {
   validateStepsForActivation,
   validateTriggerForActivation,
 } from '@/lib/automations/validate'
+import { prepareTagTriggerConfigForSave } from '@/lib/automations/tag-recurrence-config'
 
 export async function GET() {
   const supabase = await createClient()
@@ -84,6 +85,12 @@ export async function POST(request: Request) {
       { status: 400 },
     )
   }
+
+  effectiveTriggerConfig = prepareTagTriggerConfigForSave(
+    effectiveTriggerType,
+    effectiveTriggerConfig ?? {},
+    (effectiveSteps ?? []) as { step_type: string; step_config: Record<string, unknown> }[],
+  ) as typeof effectiveTriggerConfig
 
   // Block activation of a clearly broken automation up-front instead of
   // letting every trigger silently produce a failed log row. Drafts
