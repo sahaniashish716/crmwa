@@ -297,8 +297,9 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
         }
       }
 
-      // Handle incoming messages
-      if (!value.messages || !value.contacts) continue
+      // Handle incoming messages (contacts[] is usually present but Meta
+      // may omit it on some payloads — identity still comes from messages[].from).
+      if (!value.messages?.length) continue
 
       const phoneNumberId = value.metadata.phone_number_id
 
@@ -341,9 +342,14 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
 
       const decryptedAccessToken = decrypt(config.access_token)
 
+      const contactList = value.contacts ?? []
+
       for (let i = 0; i < value.messages.length; i++) {
         const message = value.messages[i]
-        const contact = value.contacts[i] || value.contacts[0]
+        const contact =
+          contactList[i] ??
+          contactList[0] ??
+          syntheticContactFromMessage(message)
 
         await processMessage(
           message,
@@ -648,6 +654,21 @@ async function handleReaction(
   if (upsertError) {
     console.error('[webhook] reaction upsert failed:', upsertError.message)
   }
+}
+
+/** When Meta omits contacts[], derive a minimal payload from the message. */
+function syntheticContactFromMessage(message: WhatsAppMessage): WaContactPayload | undefined {
+  if (message.from?.trim()) {
+    return { wa_id: message.from.trim(), profile: { name: '' } }
+  }
+  if (message.from_user_id?.trim()) {
+    return {
+      user_id: message.from_user_id.trim(),
+      parent_user_id: message.from_parent_user_id?.trim(),
+      profile: { name: '' },
+    }
+  }
+  return undefined
 }
 
 async function processMessage(

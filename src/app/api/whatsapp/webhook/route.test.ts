@@ -300,19 +300,22 @@ const LEGACY_CONTACTS = [{ wa_id: '15551230000', profile: { name: 'Ada' } }]
 
 function inboundRequest(
   message: Record<string, unknown> = TEXT_MESSAGE,
-  contacts: Record<string, unknown>[] = LEGACY_CONTACTS,
+  contacts: Record<string, unknown>[] | 'omit' = LEGACY_CONTACTS,
 ) {
+  const value: Record<string, unknown> = {
+    metadata: { phone_number_id: 'pn-1' },
+    messages: [message],
+  }
+  if (contacts !== 'omit') {
+    value.contacts = contacts
+  }
   const body = {
     entry: [
       {
         changes: [
           {
             field: 'messages',
-            value: {
-              metadata: { phone_number_id: 'pn-1' },
-              contacts,
-              messages: [message],
-            },
+            value,
           },
         ],
       },
@@ -326,7 +329,7 @@ function inboundRequest(
 
 async function runWebhook(
   message?: Record<string, unknown>,
-  contacts?: Record<string, unknown>[],
+  contacts?: Record<string, unknown>[] | 'omit',
 ) {
   const res = await POST(inboundRequest(message, contacts))
   // Drain the after() callback exactly as the runtime would.
@@ -437,6 +440,15 @@ describe('inbound webhook: idempotent insert (#367)', () => {
     expect(h.runAutomationsForTrigger).not.toHaveBeenCalled()
     expect(h.dispatchInboundToAiReply).not.toHaveBeenCalled()
     expect(h.dispatchWebhookEvent).not.toHaveBeenCalled()
+  })
+})
+
+describe('inbound webhook: missing contacts[]', () => {
+  it('still persists when Meta omits contacts and only sends messages[].from', async () => {
+    await runWebhook(TEXT_MESSAGE, 'omit')
+
+    expect(h.state.upsertCalls).toHaveLength(1)
+    expect(h.state.rpcCalls).toHaveLength(1)
   })
 })
 
