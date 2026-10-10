@@ -45,7 +45,8 @@ export async function GET(request: Request) {
       serviceRoleConfigured &&
       encryptionConfigured &&
       waConfig?.status === 'connected' &&
-      Boolean(waConfig?.phone_number_id),
+      Boolean(waConfig?.phone_number_id) &&
+      Boolean(waConfig?.waba_id),
     webhook_callback_url: `${origin}/api/whatsapp/webhook`,
     checks: {
       meta_app_secret_set: metaSecretConfigured,
@@ -53,6 +54,8 @@ export async function GET(request: Request) {
       encryption_key_set: encryptionConfigured,
       whatsapp_status_connected: waConfig?.status === 'connected',
       phone_number_id_set: Boolean(waConfig?.phone_number_id),
+      waba_id_set: Boolean(waConfig?.waba_id),
+      locally_registered: Boolean(waConfig?.registered_at),
     },
     whatsapp: waConfig ?? null,
     last_customer_message: lastInbound
@@ -74,8 +77,12 @@ export async function GET(request: Request) {
         'Set META_APP_SECRET on Vercel — without it webhook POST returns 401 and Meta stops sending inbound events.',
       waConfig?.status !== 'connected' &&
         'Connect WhatsApp in Settings; inbound routing uses phone_number_id from whatsapp_config.',
+      !waConfig?.waba_id &&
+        'WABA ID missing on whatsapp_config — inbound routing cannot match Meta webhooks until you re-save Settings → WhatsApp with WABA ID (or deploy the legacy auto-bind fix).',
+      !waConfig?.registered_at &&
+        'registered_at is empty — number may never have been subscribed to webhooks; re-save WhatsApp settings.',
       !lastInbound &&
-        'No customer messages in DB — usual causes: wrong META_APP_SECRET (401), messages webhook field not subscribed, or phone_number_id mismatch (now auto-synced from WABA when possible).',
+        'No customer messages in DB — usual causes: wrong META_APP_SECRET (401), messages webhook field not subscribed, or phone_number_id / waba_id mismatch (auto-synced from webhooks when possible).',
     ].filter(Boolean),
   })
 }
