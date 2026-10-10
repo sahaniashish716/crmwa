@@ -35,6 +35,7 @@ import { ResponseTimeChart } from '@/components/dashboard/response-time-chart'
 import { ActivityFeed } from '@/components/dashboard/activity-feed'
 
 import { useTranslations } from 'next-intl'
+import { WhatsAppInboundSetupBanner } from '@/components/whatsapp/inbound-setup-banner'
 
 type RangeDays = 7 | 30 | 90
 
@@ -130,6 +131,8 @@ export default function DashboardPage() {
           {t('description')}
         </p>
       </div>
+
+      <WhatsAppInboundSetupBanner />
 
       {/* Metric cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

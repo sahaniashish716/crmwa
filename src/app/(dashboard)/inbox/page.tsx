@@ -16,6 +16,7 @@ import { ContactSidebar } from "@/components/inbox/contact-sidebar";
 import { toast } from "sonner";
 import { WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { WhatsAppInboundSetupBanner } from "@/components/whatsapp/inbound-setup-banner";
 
 // Remembers the agent's show/hide choice for the desktop contact panel
 // across reloads and sessions (device-scoped, like the theme prefs).
@@ -668,6 +669,12 @@ function InboxPageInner() {
           <p className="text-xs text-amber-400">
             {t("whatsappNotConnected")}
           </p>
+        </div>
+      )}
+
+      {whatsappConnected !== false && (
+        <div className="shrink-0 px-3 pt-2 sm:px-4">
+          <WhatsAppInboundSetupBanner />
         </div>
       )}
 
