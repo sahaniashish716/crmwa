@@ -58,4 +58,28 @@ LIMIT 5;
 ```
 
 - **No row** → webhook never persisted (steps 1–3).
-- **Row exists** → UI/RLS/wrong conversation (step 4).
+- **Row exists** but Inbox still shows old dates (e.g. “2 months”) → messages are saved but **`conversations.last_message_at` was not updated**. Usually migration **037** (`bump_conversation_on_inbound`) was never run on Supabase. New deploys fall back to a direct UPDATE, but run **037** and this one-time repair:
+
+```sql
+UPDATE conversations c
+SET
+  last_message_at = lm.created_at,
+  last_message_text = COALESCE(
+    NULLIF(TRIM(lm.content_text), ''),
+    '[' || lm.content_type || ']'
+  )
+FROM (
+  SELECT DISTINCT ON (conversation_id)
+    conversation_id, created_at, content_text, content_type
+  FROM messages
+  ORDER BY conversation_id, created_at DESC
+) lm
+WHERE c.id = lm.conversation_id
+  AND (c.last_message_at IS NULL OR c.last_message_at < lm.created_at);
+```
+
+Then hard-refresh Inbox or search the contact **phone** in the list (replies attach to the **oldest** conversation for that contact if duplicates exist).
+
+### 6. Opening `/api/whatsapp/webhook` in a browser
+
+A GET with no query params returns `{"error":"Missing verification parameters"}`. That is **normal** — Meta verification uses `?hub.mode=subscribe&hub.verify_token=...&hub.challenge=...`. It does **not** mean the webhook is broken.

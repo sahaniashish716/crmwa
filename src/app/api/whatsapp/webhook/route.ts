@@ -15,6 +15,7 @@ import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe'
 import { reopenClosedConversation } from '@/lib/conversations/reopen'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { resolveWhatsappConfigForInbound } from '@/lib/whatsapp/webhook-config'
+import { bumpConversationOnInbound } from '@/lib/inbox/bump-conversation-on-inbound'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
@@ -841,17 +842,11 @@ async function processMessage(
   // both reads see the same value and write the same increment, losing one
   // (issue #369). The RPC increments in a single UPDATE and refreshes the
   // last-message summary in the same statement.
-  const { error: convError } = await supabaseAdmin().rpc(
-    'bump_conversation_on_inbound',
-    {
-      p_conversation_id: conversation.id,
-      p_last_message_text: contentText || `[${message.type}]`,
-    }
+  await bumpConversationOnInbound(
+    supabaseAdmin(),
+    conversation.id,
+    contentText || `[${message.type}]`,
   )
-
-  if (convError) {
-    console.error('Error updating conversation:', convError)
-  }
 
   // A customer writing again re-opens the thread (issue #409). Kept as a
   // separate conditional statement rather than a `status` field on the
