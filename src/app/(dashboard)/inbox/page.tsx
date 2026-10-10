@@ -120,6 +120,29 @@ function InboxPageInner() {
     knownConvIdsRef.current = next;
   }, [conversations]);
 
+  const activeConversationIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    activeConversationIdRef.current = activeConversation?.id ?? null;
+  }, [activeConversation?.id]);
+
+  /** Previous list snapshot for poll/resync diff toasts (realtime can miss INSERT). */
+  const conversationsSnapshotRef = useRef<Conversation[]>([]);
+  const lastInboundToastRef = useRef<Map<string, number>>(new Map());
+
+  const notifyInboundToast = useCallback((conv: Conversation, preview?: string) => {
+    if (activeConversationIdRef.current === conv.id) return;
+    const now = Date.now();
+    const last = lastInboundToastRef.current.get(conv.id) ?? 0;
+    if (now - last < 4000) return;
+    lastInboundToastRef.current.set(conv.id, now);
+
+    const description =
+      preview?.trim().slice(0, 80) ||
+      conv.last_message_text?.trim().slice(0, 80) ||
+      "New message";
+    toast.message("New WhatsApp message", { description });
+  }, []);
+
   // Pull the conversation row with its `contact` joined and merge it
   // into state. Needed because Supabase Realtime payloads only carry the
   // row's own columns — a brand-new conversation arrives without a
@@ -225,7 +248,18 @@ function InboxPageInner() {
           const preview =
             newMsg.content_text?.trim().slice(0, 80) ||
             `[${newMsg.content_type}]`;
-          toast.message("New WhatsApp message", { description: preview });
+          const conv = conversations.find(
+            (c) => c.id === newMsg.conversation_id,
+          );
+          if (conv) notifyInboundToast(conv, preview);
+          else
+            notifyInboundToast(
+              {
+                id: newMsg.conversation_id,
+                last_message_text: preview,
+              } as Conversation,
+              preview,
+            );
         }
 
         // Add to messages if it belongs to active conversation
@@ -279,7 +313,7 @@ function InboxPageInner() {
         );
       }
     },
-    [activeConversation, hydrateConversation]
+    [activeConversation, hydrateConversation, conversations, notifyInboundToast]
   );
 
   // Handle realtime conversation events
@@ -307,6 +341,13 @@ function InboxPageInner() {
       }
 
       if (event.eventType === "UPDATE") {
+        const prevUnread =
+          (event.old as Partial<Conversation> | undefined)?.unread_count ?? 0;
+        const nextUnread = conv.unread_count ?? 0;
+        if (nextUnread > prevUnread) {
+          notifyInboundToast(conv);
+        }
+
         if (knownConvIdsRef.current.has(conv.id)) {
           // If this UPDATE is for the conv the user is currently viewing,
           // suppress the incoming unread_count — the user is reading it
@@ -341,7 +382,7 @@ function InboxPageInner() {
         }
       }
     },
-    [activeConversation, hydrateConversation]
+    [activeConversation, hydrateConversation, notifyInboundToast]
   );
 
   // Subscribe to realtime. The `isConnected` flag below feeds the
@@ -420,6 +461,34 @@ function InboxPageInner() {
 
   const handleConversationsLoaded = useCallback(
     (loaded: Conversation[]) => {
+      const prev = conversationsSnapshotRef.current;
+      if (prev.length > 0) {
+        for (const c of loaded) {
+          const old = prev.find((p) => p.id === c.id);
+          if (!old) {
+            if ((c.unread_count ?? 0) > 0) notifyInboundToast(c);
+            continue;
+          }
+          if ((c.unread_count ?? 0) > (old.unread_count ?? 0)) {
+            notifyInboundToast(c);
+            continue;
+          }
+          const oldAt = old.last_message_at
+            ? new Date(old.last_message_at).getTime()
+            : 0;
+          const newAt = c.last_message_at
+            ? new Date(c.last_message_at).getTime()
+            : 0;
+          if (
+            newAt > oldAt &&
+            (c.last_message_text ?? "") !== (old.last_message_text ?? "") &&
+            activeConversationIdRef.current !== c.id
+          ) {
+            notifyInboundToast(c);
+          }
+        }
+      }
+      conversationsSnapshotRef.current = loaded;
       setConversations(loaded);
       // Resolve a pending deep-link here rather than in an effect — this
       // is an event handler, so the setState calls below are allowed by
@@ -461,7 +530,7 @@ function InboxPageInner() {
         }
       }
     },
-    [deepLinkConvId, activeConversation?.id]
+    [deepLinkConvId, activeConversation?.id, notifyInboundToast]
   );
 
   const handleSelectConversation = useCallback(
