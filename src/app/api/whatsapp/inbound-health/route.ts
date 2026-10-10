@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 
   const { data: waConfig } = await admin
     .from('whatsapp_config')
-    .select('phone_number_id, status, waba_id, updated_at')
+    .select('phone_number_id, status, waba_id, registered_at, updated_at')
     .eq('account_id', accountId)
     .maybeSingle()
 

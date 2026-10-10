@@ -31,7 +31,12 @@ export async function resolveWhatsappConfigForInbound(
       return null
     }
     if (byPhone && byPhone.length === 1) {
-      return byPhone[0] as WhatsappConfigRow
+      const config = byPhone[0] as WhatsappConfigRow
+      const waba = wabaId?.trim()
+      if (waba && config.waba_id !== waba) {
+        await syncInboundIdsFromMeta(admin, config, pnid, waba)
+      }
+      return config
     }
     if (byPhone && byPhone.length > 1) {
       console.error(
@@ -60,6 +65,9 @@ export async function resolveWhatsappConfigForInbound(
   }
 
   if (!byWaba || byWaba.length === 0) {
+    const legacy = await bindLegacyConnectedConfig(admin, pnid, waba)
+    if (legacy) return legacy
+
     console.error(
       '[webhook] No whatsapp_config for phone_number_id or waba_id:',
       pnid ?? '(missing)',
@@ -75,21 +83,75 @@ export async function resolveWhatsappConfigForInbound(
 
   const config = byWaba[0] as WhatsappConfigRow
 
-  if (pnid && config.phone_number_id !== pnid) {
-    console.warn(
-      '[webhook] phone_number_id mismatch — updating whatsapp_config from Meta metadata',
-      { stored: config.phone_number_id, incoming: pnid, waba_id: waba },
+  syncInboundIdsFromMeta(admin, config, pnid, waba)
+  return config
+}
+
+/** Patch phone_number_id / waba_id on a matched row when Meta metadata differs. */
+async function syncInboundIdsFromMeta(
+  admin: SupabaseClient,
+  config: WhatsappConfigRow,
+  phoneNumberId: string | undefined,
+  wabaId: string | undefined,
+): Promise<void> {
+  const pnid = phoneNumberId?.trim()
+  const waba = wabaId?.trim()
+  const patch: { phone_number_id?: string; waba_id?: string } = {}
+  if (pnid && config.phone_number_id !== pnid) patch.phone_number_id = pnid
+  if (waba && config.waba_id !== waba) patch.waba_id = waba
+  if (Object.keys(patch).length === 0) return
+
+  console.warn('[webhook] syncing whatsapp_config from Meta webhook metadata', {
+    config_id: config.id,
+    stored: { phone_number_id: config.phone_number_id, waba_id: config.waba_id },
+    incoming: { phone_number_id: pnid ?? null, waba_id: waba ?? null },
+  })
+
+  const { error: updErr } = await admin
+    .from('whatsapp_config')
+    .update(patch)
+    .eq('id', config.id)
+  if (updErr) {
+    console.error('[webhook] failed to sync whatsapp_config ids:', updErr)
+    return
+  }
+  if (patch.phone_number_id) config.phone_number_id = patch.phone_number_id
+  if (patch.waba_id) config.waba_id = patch.waba_id
+}
+
+/**
+ * Older CRM rows were saved without waba_id. Inbound webhooks always carry
+ * entry.id (WABA) + metadata.phone_number_id — bind the sole connected config
+ * so replies start landing again without a manual Settings re-save.
+ */
+async function bindLegacyConnectedConfig(
+  admin: SupabaseClient,
+  phoneNumberId: string | undefined,
+  wabaId: string | undefined,
+): Promise<WhatsappConfigRow | null> {
+  const { data, error } = await admin
+    .from('whatsapp_config')
+    .select('*')
+    .is('waba_id', null)
+    .eq('status', 'connected')
+
+  if (error) {
+    console.error('[webhook] legacy whatsapp_config lookup failed:', error)
+    return null
+  }
+  if (!data || data.length === 0) return null
+  if (data.length > 1) {
+    console.error(
+      `[webhook] ${data.length} connected configs missing waba_id — inbound dropped; set WABA in Settings for each account`,
     )
-    const { error: updErr } = await admin
-      .from('whatsapp_config')
-      .update({ phone_number_id: pnid })
-      .eq('id', config.id)
-    if (updErr) {
-      console.error('[webhook] failed to sync phone_number_id:', updErr)
-    } else {
-      config.phone_number_id = pnid
-    }
+    return null
   }
 
+  const config = data[0] as WhatsappConfigRow
+  console.warn(
+    '[webhook] binding legacy whatsapp_config (missing waba_id) from first inbound webhook',
+    { config_id: config.id, account_id: config.account_id },
+  )
+  await syncInboundIdsFromMeta(admin, config, phoneNumberId, wabaId)
   return config
 }
