@@ -7,6 +7,7 @@ import {
   matchesContactFilters,
   normalizeConversations,
 } from "@/lib/inbox/conversations";
+import { dedupeConversationsByContact } from "@/lib/inbox/thread-scope";
 import { cn } from "@/lib/utils";
 import type { Conversation, ConversationStatus, Tag } from "@/types";
 import { Search, ChevronDown, X } from "lucide-react";
@@ -114,7 +115,10 @@ export function ConversationList({
         return;
       }
 
-      onConversationsLoadedRef.current(normalizeConversations(data ?? []));
+      const rows = dedupeConversationsByContact(
+        normalizeConversations(data ?? []),
+      );
+      onConversationsLoadedRef.current(rows);
       setLoading(false);
     })();
 

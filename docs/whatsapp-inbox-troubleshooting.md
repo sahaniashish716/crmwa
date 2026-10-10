@@ -42,6 +42,8 @@ Run pending SQL from `supabase/migrations/` on your Supabase project if inbound 
 ### 4. In the Inbox UI
 
 - Open **Inbox** and look for the contact by **phone** — replies attach to the **oldest** conversation for that contact. Duplicate contacts = duplicate threads; the new reply may be on another row.
+- **Settings → Check inbound** with a phone query, e.g. `/api/whatsapp/inbound-health?phone=%2B918169141984` (while logged in). If `recent_customer_messages` is empty but WhatsApp shows replies, Meta is not POSTing `messages` to your webhook (check `META_APP_SECRET` and subscribed fields).
+- Run migration **036** (`merge_duplicate_conversations()`) on Supabase if the same number has multiple conversation rows.
 - Click **Refresh** on the thread header or wait ~20s (poll fallback).
 - Ensure your user **profile `account_id`** matches the WhatsApp config account (teammates see the shared inbox only when linked to that account).
 

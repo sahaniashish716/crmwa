@@ -7,6 +7,8 @@ import { supabaseAdmin } from '@/lib/automations/admin-client'
  * WhatsApp messages into Inbox?
  */
 export async function GET(request: Request) {
+  const url = new URL(request.url)
+  const probePhone = url.searchParams.get('phone')?.trim() ?? ''
   let accountId: string
   try {
     const ctx = await getCurrentAccount()
@@ -38,6 +40,63 @@ export async function GET(request: Request) {
   const metaSecretConfigured = Boolean(process.env.META_APP_SECRET?.trim())
   const serviceRoleConfigured = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY?.trim())
   const encryptionConfigured = Boolean(process.env.ENCRYPTION_KEY?.trim())
+
+  let phoneProbe: Record<string, unknown> | null = null
+  if (probePhone) {
+    const suffix =
+      probePhone.replace(/\D/g, '').slice(-8) || probePhone.replace(/\D/g, '')
+    const { data: contacts } = await admin
+      .from('contacts')
+      .select('id, phone, name')
+      .eq('account_id', accountId)
+      .like('phone', `%${suffix}`)
+      .limit(20)
+
+    const matched = (contacts ?? []).filter((c) => {
+      const p = String(c.phone ?? '')
+      const digits = (s: string) => s.replace(/\D/g, '')
+      const a = digits(p)
+      const b = digits(probePhone)
+      return a === b || (a.length >= 8 && b.length >= 8 && a.slice(-8) === b.slice(-8))
+    })
+
+    const contactIds = matched.map((c) => c.id as string)
+    let customerMessages: unknown[] = []
+    if (contactIds.length > 0) {
+      const { data: convs } = await admin
+        .from('conversations')
+        .select('id, last_message_at, last_message_text')
+        .eq('account_id', accountId)
+        .in('contact_id', contactIds)
+
+      const convIds = (convs ?? []).map((c) => c.id as string)
+      if (convIds.length > 0) {
+        const { data: msgs } = await admin
+          .from('messages')
+          .select(
+            'id, content_text, sender_type, created_at, conversation_id',
+          )
+          .in('conversation_id', convIds)
+          .eq('sender_type', 'customer')
+          .order('created_at', { ascending: false })
+          .limit(5)
+        customerMessages = msgs ?? []
+      }
+
+      phoneProbe = {
+        phone: probePhone,
+        contacts: matched,
+        conversations: convs ?? [],
+        recent_customer_messages: customerMessages,
+      }
+    } else {
+      phoneProbe = {
+        phone: probePhone,
+        contacts: [],
+        hint: 'No contact row matches this phone in your account — inbound will create one on first webhook.',
+      }
+    }
+  }
 
   return NextResponse.json({
     ok:
@@ -72,6 +131,7 @@ export async function GET(request: Request) {
       'META_APP_SECRET on Vercel must match the Meta app that owns this WABA',
       `Stored phone_number_id: ${waConfig?.phone_number_id ?? '(none)'} — must match Meta webhook metadata`,
     ],
+    phone_probe: phoneProbe,
     hints: [
       !metaSecretConfigured &&
         'Set META_APP_SECRET on Vercel — without it webhook POST returns 401 and Meta stops sending inbound events.',

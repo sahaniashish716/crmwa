@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { format, isToday, isYesterday, differenceInHours } from "date-fns";
 import { useTranslations } from "next-intl";
+import { fetchThreadMessages } from "@/lib/inbox/thread-scope";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -292,19 +293,20 @@ export function MessageThread({
   // arriving while the thread is open don't trigger a full refetch —
   // they only flip hasUnread, which only the reset effect listens to.
   useEffect(() => {
-    if (!conversationId) return;
+    if (!conversationId || !conversation?.contact_id) return;
 
     const supabase = createClient();
     let cancelled = false;
+    const conv = conversation;
 
     (async () => {
       setLoading(true);
 
-      const { data, error } = await supabase
-        .from("messages")
-        .select("*")
-        .eq("conversation_id", conversationId)
-        .order("created_at", { ascending: true });
+      const { data, error } = await fetchThreadMessages(
+        supabase,
+        { id: conversationId, contact_id: conv.contact_id },
+        contact,
+      );
 
       if (cancelled) return;
 
@@ -324,7 +326,7 @@ export function MessageThread({
     // the realtime channel reconnects or the tab regains focus —
     // realtime is best-effort and any message events sent while the WS
     // was disconnected or throttled are otherwise lost.
-  }, [conversationId, resyncToken]);
+  }, [conversationId, resyncToken, conversation?.contact_id, contact]);
 
   // Reactions fetch — pulls the current state from the DB. Kept separate
   // from the channel subscription below so a `resyncToken` bump just

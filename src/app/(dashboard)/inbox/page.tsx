@@ -263,6 +263,16 @@ function InboxPageInner() {
         }
 
         // Add to messages if it belongs to active conversation
+        if (
+          activeConversation &&
+          newMsg.sender_type === "customer" &&
+          newMsg.conversation_id !== activeConversation.id
+        ) {
+          // Inbound may land on a sibling conversation row for the same
+          // contact; thread fetch merges those ids — refetch the open thread.
+          setResyncToken((n) => n + 1);
+        }
+
         if (activeConversation && isActiveThread) {
           setMessages((prev) => {
             // Avoid duplicates
