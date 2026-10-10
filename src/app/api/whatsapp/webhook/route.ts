@@ -309,10 +309,24 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
         entry.id,
       )
       if (!config) {
+        console.error('[webhook] inbound messages dropped — no whatsapp_config match', {
+          phone_number_id: phoneNumberId ?? null,
+          waba_id: entry.id ?? null,
+          message_count: value.messages.length,
+        })
         continue
       }
 
-      const decryptedAccessToken = decrypt(String(config.access_token ?? ''))
+      let decryptedAccessToken: string
+      try {
+        decryptedAccessToken = decrypt(String(config.access_token ?? ''))
+      } catch (err) {
+        console.error(
+          '[webhook] access_token decrypt failed — inbound dropped. ENCRYPTION_KEY must match the key used when saving WhatsApp settings.',
+          { account_id: config.account_id, error: err },
+        )
+        continue
+      }
 
       const contactList = value.contacts ?? []
 
