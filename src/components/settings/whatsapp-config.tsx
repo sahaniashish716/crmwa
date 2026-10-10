@@ -124,6 +124,7 @@ export function WhatsAppConfig() {
   const lastRegistrationError = config?.last_registration_error ?? null;
 
   const [verifyingRegistration, setVerifyingRegistration] = useState(false);
+  const [registeringInbound, setRegisteringInbound] = useState(false);
   type RegistrationProbe = {
     live: boolean;
     checks: Record<string, boolean | null>;
@@ -422,6 +423,44 @@ export function WhatsAppConfig() {
     }
   }
 
+  async function handleRegisterInbound() {
+    if (!pin.trim()) {
+      toast.error(
+        'Enter the two-step verification PIN from Meta Business Manager first.',
+      );
+      return;
+    }
+    setRegisteringInbound(true);
+    try {
+      const res = await fetch('/api/whatsapp/config/register-inbound', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: pin.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(
+          (data as { error?: string }).error ?? 'Inbound registration failed',
+          { duration: 10000 },
+        );
+        if (accountId) await fetchConfig(accountId);
+        return;
+      }
+      toast.success(
+        (data as { message?: string }).message ??
+          'Inbound registration complete — send a test reply on WhatsApp.',
+      );
+      setPin('');
+      if (accountId) await fetchConfig(accountId);
+      setRegistrationProbe(null);
+    } catch (err) {
+      console.error('register-inbound failed:', err);
+      toast.error('Could not register inbound with Meta');
+    } finally {
+      setRegisteringInbound(false);
+    }
+  }
+
   async function handleVerifyRegistration() {
     setVerifyingRegistration(true);
     setRegistrationProbe(null);
@@ -666,20 +705,36 @@ export function WhatsAppConfig() {
                     : t('notRegistered')}
                 </AlertTitle>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleVerifyRegistration}
-                disabled={verifyingRegistration}
-                className="border-border bg-transparent text-foreground hover:bg-muted h-7"
-              >
-                {verifyingRegistration ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <Zap className="size-3.5" />
+              <div className="flex flex-wrap gap-2">
+                {!isRegistered && (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleRegisterInbound}
+                    disabled={registeringInbound || !canEditSettings}
+                    className="h-7"
+                  >
+                    {registeringInbound ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : null}
+                    Register inbound
+                  </Button>
                 )}
-                {t('verifyWithMeta')}
-              </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleVerifyRegistration}
+                  disabled={verifyingRegistration}
+                  className="border-border bg-transparent text-foreground hover:bg-muted h-7"
+                >
+                  {verifyingRegistration ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Zap className="size-3.5" />
+                  )}
+                  {t('verifyWithMeta')}
+                </Button>
+              </div>
             </div>
             <AlertDescription className="text-muted-foreground mt-2 text-xs leading-relaxed">
               {isRegistered ? (
@@ -701,7 +756,12 @@ export function WhatsAppConfig() {
                   . {t('retryHint')}
                 </>
               ) : (
-                <>{t('noRegistrationHint')}</>
+                <>
+                  {t('noRegistrationHint')}{' '}
+                  <strong className="text-amber-200">
+                    Inbox will stay empty for customer replies until this succeeds.
+                  </strong>
+                </>
               )}
             </AlertDescription>
 
@@ -888,15 +948,17 @@ export function WhatsAppConfig() {
                       toast.error(body?.error ?? 'Inbound health check failed');
                       return;
                     }
-                    if (body.ok) {
+                    if (body.ok && body.checks?.locally_registered) {
                       toast.success('Inbound webhook path looks configured', {
                         description: body.last_customer_message?.at
                           ? `Last customer message: ${body.last_customer_message.at}`
                           : 'No customer messages in CRM yet — send a test reply from a phone.',
                       });
                     } else {
-                      toast.warning('Inbound may not work yet', {
-                        description: (body.hints as string[])?.[0] ?? 'See checklist in docs.',
+                      toast.warning('Inbound is NOT fully wired', {
+                        description:
+                          (body.hints as string[])?.[0] ??
+                          'Use Register inbound with your Meta two-step PIN.',
                       });
                     }
                   } catch {

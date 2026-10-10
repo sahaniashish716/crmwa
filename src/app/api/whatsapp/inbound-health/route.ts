@@ -22,7 +22,9 @@ export async function GET(request: Request) {
 
   const { data: waConfig } = await admin
     .from('whatsapp_config')
-    .select('phone_number_id, status, waba_id, registered_at, updated_at')
+    .select(
+      'phone_number_id, status, waba_id, registered_at, subscribed_apps_at, updated_at',
+    )
     .eq('account_id', accountId)
     .maybeSingle()
 
@@ -105,7 +107,8 @@ export async function GET(request: Request) {
       encryptionConfigured &&
       waConfig?.status === 'connected' &&
       Boolean(waConfig?.phone_number_id) &&
-      Boolean(waConfig?.waba_id),
+      Boolean(waConfig?.waba_id) &&
+      Boolean(waConfig?.registered_at),
     webhook_callback_url: `${origin}/api/whatsapp/webhook`,
     checks: {
       meta_app_secret_set: metaSecretConfigured,
@@ -115,6 +118,7 @@ export async function GET(request: Request) {
       phone_number_id_set: Boolean(waConfig?.phone_number_id),
       waba_id_set: Boolean(waConfig?.waba_id),
       locally_registered: Boolean(waConfig?.registered_at),
+      waba_subscribed_at: Boolean(waConfig?.subscribed_apps_at),
     },
     whatsapp: waConfig ?? null,
     last_customer_message: lastInbound
@@ -140,7 +144,9 @@ export async function GET(request: Request) {
       !waConfig?.waba_id &&
         'WABA ID missing on whatsapp_config — inbound routing cannot match Meta webhooks until you re-save Settings → WhatsApp with WABA ID (or deploy the legacy auto-bind fix).',
       !waConfig?.registered_at &&
-        'registered_at is empty — number may never have been subscribed to webhooks; re-save WhatsApp settings.',
+        'registered_at is empty — Meta is NOT routing inbound messages to this CRM. Settings → WhatsApp: enter your two-step verification PIN and use “Register inbound”, or Save Configuration with PIN filled in.',
+      !waConfig?.subscribed_apps_at &&
+        'subscribed_apps_at is empty — WABA may not be subscribed to this Meta app; re-save WhatsApp settings or use Register inbound.',
       !lastInbound &&
         'No customer messages in DB — usual causes: wrong META_APP_SECRET (401), messages webhook field not subscribed, or phone_number_id / waba_id mismatch (auto-synced from webhooks when possible).',
     ].filter(Boolean),
