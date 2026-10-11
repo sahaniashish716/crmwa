@@ -11,6 +11,7 @@ import {
   validateTriggerForActivation,
 } from '@/lib/automations/validate'
 import { prepareTagTriggerConfigForSave } from '@/lib/automations/tag-recurrence-config'
+import { cancelPendingRunsForAutomation } from '@/lib/automations/cancel-pending'
 
 // ------------------------------------------------------------
 // Tenancy note (GHSA-xvrq-88hg-44q6)
@@ -158,6 +159,10 @@ export async function PATCH(
       .eq('id', id)
       .eq('account_id', accountId)
     if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 })
+
+    if (update.is_active === false) {
+      await cancelPendingRunsForAutomation(id)
+    }
   }
 
   if (Array.isArray(body.steps)) {

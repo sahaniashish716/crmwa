@@ -52,6 +52,7 @@ export async function scheduleTagRecurrenceIfConfigured(
     console.error('[automations] recurrence reload automation failed:', error)
   }
   const source = (fresh as Automation | null) ?? automation
+  if (!source.is_active) return
   const interval = tagRecurrenceInterval(source)
   if (!interval) return
 

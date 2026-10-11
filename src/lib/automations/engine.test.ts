@@ -57,7 +57,15 @@ vi.mock("./admin-client", () => {
       }
       return { data: null, error: null };
     }
-    if (table === "automations") return { data: state.automations, error: null };
+    if (table === "automations") {
+      const idEq = ops.filters.find((f) => f[0] === "eq" && f[1] === "id");
+      if (idEq) {
+        const row = state.automations.find((a) => a.id === idEq[2]);
+        if (row) return { data: row, error: null };
+        return { data: { is_active: true }, error: null };
+      }
+      return { data: state.automations, error: null };
+    }
     if (table === "automation_logs") {
       if (type === "insert") {
         state.logInserts.push(ops.payload as Record<string, unknown>);

@@ -216,6 +216,11 @@ export async function resumePendingExecution(pending: {
     return
   }
 
+  if (!(automation as Automation).is_active) {
+    await markPending(pending.id, 'failed')
+    return
+  }
+
   try {
     if (isRecurrencePendingRow(pending)) {
       const ctx = pending.context ?? {}
@@ -268,6 +273,17 @@ export async function resumePendingExecution(pending: {
 
 async function executeAutomation(automation: Automation, input: DispatchInput) {
   const db = supabaseAdmin()
+
+  const { data: liveRow, error: liveErr } = await db
+    .from('automations')
+    .select('is_active')
+    .eq('id', automation.id)
+    .maybeSingle()
+  if (liveErr) {
+    console.error('[automations] is_active check failed:', liveErr)
+    return
+  }
+  if (!liveRow?.is_active) return
 
   if (input.contactId && !input.skipPendingCancel) {
     await cancelPendingWaitsForContact(automation.id, input.contactId)
