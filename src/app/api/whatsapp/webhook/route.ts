@@ -17,6 +17,8 @@ import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { resolveWhatsappConfigForInbound } from '@/lib/whatsapp/webhook-config'
 import { bumpConversationOnInbound } from '@/lib/inbox/bump-conversation-on-inbound'
 import { insertInboundCustomerMessage } from '@/lib/inbox/insert-inbound-message'
+import { updateMessagesStatusByWamid } from '@/lib/inbox/update-message-status'
+import { isMissingWaUserIdColumn } from '@/lib/whatsapp/outbound-contact'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
@@ -433,20 +435,12 @@ async function handleStatusUpdate(status: {
   //    `.select()`: message_id is NOT unique (migration 009 — Meta ids
   //    repeat across numbers), so this updates 0..N rows and must not
   //    assume a single row.
-  const messageUpdate: Record<string, unknown> = { status: status.status }
-  if (failure) {
-    messageUpdate.error_code = failure.code
-    messageUpdate.error_title = failure.title
-    messageUpdate.error_details = failure.details
-  }
-  const { error: msgErr } = await supabaseAdmin()
-    .from('messages')
-    .update(messageUpdate)
-    .eq('message_id', status.id)
-
-  if (msgErr) {
-    console.error('Error updating message status:', msgErr)
-  }
+  await updateMessagesStatusByWamid(
+    supabaseAdmin(),
+    status.id,
+    status.status,
+    failure,
+  )
 
   // Webhook fan-out for this status change happens at the END of this
   // handler (after the broadcast mirror below), so a slow subscriber
@@ -1225,6 +1219,7 @@ async function findContactByWaUserId(
     .maybeSingle()
 
   if (error) {
+    if (isMissingWaUserIdColumn(error)) return null
     console.error('[webhook] BSUID contact lookup failed:', error.message)
     return null
   }
@@ -1340,19 +1335,46 @@ async function findOrCreateContact(
   // stored with '' — which migration 022's partial unique index
   // tolerates, and migration 040's BSUID index is what keeps them
   // unique instead.
-  const { data: newContact, error: createError } = await supabaseAdmin()
-    .from('contacts')
-    .insert({
-      account_id: accountId,
-      user_id: configOwnerUserId,
-      phone: identity.phone,
-      name: identityDisplayName(identity),
-      wa_user_id: identity.waUserId,
-      wa_parent_user_id: identity.waParentUserId,
-      wa_username: identity.waUsername,
-    })
-    .select()
-    .single()
+  const contactInsertBase = {
+    account_id: accountId,
+    user_id: configOwnerUserId,
+    phone: identity.phone,
+    name: identityDisplayName(identity),
+  }
+  const contactInsertFull = {
+    ...contactInsertBase,
+    wa_user_id: identity.waUserId,
+    wa_parent_user_id: identity.waParentUserId,
+    wa_username: identity.waUsername,
+  }
+
+  let newContact: ContactRow | null = null
+  let createError: { message?: string; code?: string } | null = null
+
+  {
+    const res = await supabaseAdmin()
+      .from('contacts')
+      .insert(contactInsertFull)
+      .select()
+      .single()
+    newContact = res.data
+    createError = res.error
+  }
+
+  if (createError && isMissingWaUserIdColumn(createError)) {
+    const res = await supabaseAdmin()
+      .from('contacts')
+      .insert(contactInsertBase)
+      .select()
+      .single()
+    newContact = res.data
+    createError = res.error
+    if (!createError) {
+      console.warn(
+        '[webhook] contact created without wa_* columns — apply migration 040_contact_business_scoped_user_id.sql',
+      )
+    }
+  }
 
   if (createError) {
     // Lost a race: a concurrent inbound delivery (or another path)

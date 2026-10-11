@@ -51,7 +51,7 @@ export async function fetchContactForOutboundSend(
   throw new Error('contact not found for this account')
 }
 
-function isMissingWaUserIdColumn(error: { message?: string; code?: string }): boolean {
+export function isMissingWaUserIdColumn(error: { message?: string; code?: string }): boolean {
   const msg = (error.message ?? '').toLowerCase()
   return (
     msg.includes('wa_user_id') ||

@@ -32,4 +32,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_conversation_message_id
 -- If bump_conversation_on_inbound is missing, run entire:
 --   supabase/migrations/037_webhook_broadcast_reliability.sql
 
+-- Failed delivery metadata on messages (optional but recommended):
+--   supabase/migrations/042_message_failure_reason.sql
+
+-- Full ordered list: docs/supabase-production-checklist.md (migrations 001–047)
+
 NOTIFY pgrst, 'reload schema';
