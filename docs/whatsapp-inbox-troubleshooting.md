@@ -59,7 +59,8 @@ ORDER BY created_at DESC
 LIMIT 5;
 ```
 
-- **No row** → webhook never persisted (steps 1–3).
+- **No row** → webhook never persisted (steps 1–3), **or** Vercel logs show `Error inserting message: { code: 'PGRST204'` — Meta POSTs succeed (200) but Supabase is missing columns. Run `docs/supabase-inbound-repair.sql` in the SQL editor, then `NOTIFY pgrst, 'reload schema';` (included in that file).
+- **Vercel `PGRST204`** → production DB is behind the app (common after automation/deploy without running migrations **009**, **010**, **037**, **039**). Not a Meta or automation logic bug.
 - **Row exists** but Inbox still shows old dates (e.g. “2 months”) → messages are saved but **`conversations.last_message_at` was not updated**. Usually migration **037** (`bump_conversation_on_inbound`) was never run on Supabase. New deploys fall back to a direct UPDATE, but run **037** and this one-time repair:
 
 ```sql
