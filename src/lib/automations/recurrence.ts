@@ -34,6 +34,38 @@ export function isRecurrencePendingRow(pending: {
   return true
 }
 
+/** Queue a recurrence tick at `runAtOverride` or after one interval from now. */
+export async function enqueueRecurrenceAt(
+  automation: Automation,
+  contactId: string,
+  context: AutomationContext | undefined,
+  runAtOverride?: string,
+): Promise<{ runAt: string } | { error: string }> {
+  const interval = tagRecurrenceInterval(automation)
+  if (!interval) return { error: 'no recurrence interval' }
+
+  return enqueueAutomationWait({
+    automationId: automation.id,
+    accountId: automation.account_id,
+    userId: automation.user_id,
+    contactId,
+    logId: null,
+    parentStepId: null,
+    branch: null,
+    nextStepPosition: 0,
+    context: {
+      ...(context ?? {}),
+      vars: {
+        ...(context?.vars ?? {}),
+        [RECURRENCE_TICK_VAR]: true,
+      },
+      _automation_pending_kind: 'recurrence',
+    } as AutomationContext & { _automation_pending_kind?: string },
+    cfg: interval,
+    runAtOverride,
+  })
+}
+
 /** Queue another full run after a successful completion. */
 export async function scheduleTagRecurrenceIfConfigured(
   automation: Automation,
@@ -56,25 +88,7 @@ export async function scheduleTagRecurrenceIfConfigured(
   const interval = tagRecurrenceInterval(source)
   if (!interval) return
 
-  const result = await enqueueAutomationWait({
-    automationId: source.id,
-    accountId: source.account_id,
-    userId: source.user_id,
-    contactId,
-    logId: null,
-    parentStepId: null,
-    branch: null,
-    nextStepPosition: 0,
-    context: {
-      ...(context ?? {}),
-      vars: {
-        ...(context?.vars ?? {}),
-        [RECURRENCE_TICK_VAR]: true,
-      },
-      _automation_pending_kind: 'recurrence',
-    } as AutomationContext & { _automation_pending_kind?: string },
-    cfg: interval,
-  })
+  const result = await enqueueRecurrenceAt(source, contactId, context, undefined)
   if ('error' in result) {
     console.error('[automations] recurrence schedule failed:', result.error)
   }

@@ -77,13 +77,15 @@ export interface EnqueueWaitInput {
   nextStepPosition: number
   context: AutomationContext
   cfg: WaitStepConfig
+  /** When set, schedule for this instant instead of now + cfg (reactivation bootstrap). */
+  runAtOverride?: string
 }
 
 /** Persist a wait step; returns run_at ISO on success. */
 export async function enqueueAutomationWait(
   input: EnqueueWaitInput,
 ): Promise<{ runAt: string } | { error: string }> {
-  const runAt = computeWaitRunAt(input.cfg)
+  const runAt = input.runAtOverride ?? computeWaitRunAt(input.cfg)
   const admin = supabaseAdmin()
   const { error } = await admin.from('automation_pending_executions').insert({
     automation_id: input.automationId,

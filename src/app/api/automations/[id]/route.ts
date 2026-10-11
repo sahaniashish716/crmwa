@@ -12,6 +12,8 @@ import {
 } from '@/lib/automations/validate'
 import { prepareTagTriggerConfigForSave } from '@/lib/automations/tag-recurrence-config'
 import { cancelPendingRunsForAutomation } from '@/lib/automations/cancel-pending'
+import { bootstrapTagAutomationOnActivate } from '@/lib/automations/bootstrap-tag-automation-on-activate'
+import type { Automation } from '@/types'
 
 // ------------------------------------------------------------
 // Tenancy note (GHSA-xvrq-88hg-44q6)
@@ -162,6 +164,16 @@ export async function PATCH(
 
     if (update.is_active === false) {
       await cancelPendingRunsForAutomation(id)
+    } else if (update.is_active === true && existing.is_active === false) {
+      const { data: full } = await admin
+        .from('automations')
+        .select('*')
+        .eq('id', id)
+        .eq('account_id', accountId)
+        .maybeSingle()
+      if (full?.trigger_type === 'tag_added') {
+        await bootstrapTagAutomationOnActivate(full as Automation)
+      }
     }
   }
 

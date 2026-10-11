@@ -86,6 +86,25 @@ export interface DispatchInput {
  * All errors are caught and logged; per-automation failures are
  * recorded into automation_logs with status='failed'.
  */
+/** Run a single automation row for one contact (reactivation bootstrap). */
+export async function dispatchAutomationRun(
+  automation: Automation,
+  input: {
+    contactId: string
+    context?: AutomationContext
+    skipPendingCancel?: boolean
+    triggerType?: AutomationTriggerType
+  },
+): Promise<void> {
+  await executeAutomation(automation, {
+    accountId: automation.account_id,
+    triggerType: input.triggerType ?? automation.trigger_type,
+    contactId: input.contactId,
+    context: input.context,
+    skipPendingCancel: input.skipPendingCancel,
+  })
+}
+
 export async function runAutomationsForTrigger(input: DispatchInput): Promise<void> {
   try {
     const db = supabaseAdmin()
