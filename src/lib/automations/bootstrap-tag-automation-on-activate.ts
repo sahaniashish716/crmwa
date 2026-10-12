@@ -146,7 +146,7 @@ export async function bootstrapTagAutomationOnActivate(
       logId: null,
       parentStepId: null,
       branch: null,
-      nextStepPosition: (waitStep.position ?? 0) + 1,
+      nextStepPosition: waitStep.position + 1,
       context,
       cfg: firstWait,
       runAtOverride: runAtIso,

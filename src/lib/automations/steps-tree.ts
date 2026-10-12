@@ -113,6 +113,7 @@ function seedsToTree(seeds: BuilderStepInput[]): BuilderStepInput[] {
  */
 export interface BuilderStepNode extends BuilderStepInput {
   id: string
+  position: number
   branches: { yes: BuilderStepNode[]; no: BuilderStepNode[] }
 }
 
@@ -139,6 +140,7 @@ export async function loadStepsTree(automationId: string): Promise<BuilderStepNo
   for (const row of rows) {
     byId.set(row.id, {
       id: row.id,
+      position: row.position,
       step_type: row.step_type,
       step_config: row.step_config ?? {},
       branches: { yes: [], no: [] },
