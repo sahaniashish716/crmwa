@@ -56,18 +56,19 @@ describe("dedupeByPhone", () => {
     expect(duplicates).toBe(1);
   });
 
-  it("drops rows without a leading + (no country code), counted as invalid", () => {
-    // "4155551212" is a US national number to the person who exported the
-    // CSV, but Meta would deliver it to +41 (Switzerland). Refusing it here
-    // is the bulk-import half of issue #586.
+  it("accepts full international digits without +; rejects 10-digit national", () => {
     const { unique, duplicates, invalid } = dedupeByPhone([
       { phone: "4155551212", name: "national" },
       { phone: "+14155551212", name: "international" },
       { phone: "14155551212", name: "digits with CC but no +" },
+      { phone: "918766607845", name: "india no plus" },
     ]);
-    expect(unique.map((r) => r.name)).toEqual(["international"]);
-    expect(duplicates).toBe(0);
-    expect(invalid).toBe(2);
+    expect(unique.map((r) => r.name)).toEqual(["international", "india no plus"]);
+    expect(duplicates).toBe(1);
+    expect(invalid).toBe(1);
+    expect(unique.find((r) => r.name === "india no plus")?.phone).toBe(
+      "918766607845",
+    );
   });
 
   it("drops rows with no digits, counted as invalid rather than duplicate", () => {
