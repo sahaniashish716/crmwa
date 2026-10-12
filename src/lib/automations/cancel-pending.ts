@@ -44,3 +44,48 @@ export async function cancelPendingRunsForAutomation(
 
   return cancelled
 }
+
+/**
+ * Pending rows for paused automations must never resume (cron / inbound drain).
+ * Marks them failed so they stop resurfacing via stale-running reclaim.
+ */
+export async function failPendingForInactiveAutomations(
+  accountId?: string,
+): Promise<number> {
+  const admin = supabaseAdmin()
+  let query = admin
+    .from('automation_pending_executions')
+    .select('id, automation_id, automations!inner(is_active)')
+    .in('status', ['pending', 'running'])
+
+  if (accountId) {
+    query = query.eq('account_id', accountId)
+  }
+
+  const { data, error } = await query
+  if (error) {
+    console.error('[automations] fail inactive pending fetch failed:', error)
+    return 0
+  }
+
+  const ids = (data ?? [])
+    .filter((row) => {
+      const joined = row.automations as { is_active?: boolean } | { is_active?: boolean }[]
+      const active = Array.isArray(joined) ? joined[0]?.is_active : joined?.is_active
+      return active === false
+    })
+    .map((row) => row.id as string)
+
+  if (ids.length === 0) return 0
+
+  const { error: updErr } = await admin
+    .from('automation_pending_executions')
+    .update({ status: 'failed' })
+    .in('id', ids)
+
+  if (updErr) {
+    console.error('[automations] fail inactive pending update failed:', updErr)
+    return 0
+  }
+  return ids.length
+}

@@ -43,6 +43,7 @@ export async function enqueueRecurrenceAt(
 ): Promise<{ runAt: string } | { error: string }> {
   const interval = tagRecurrenceInterval(automation)
   if (!interval) return { error: 'no recurrence interval' }
+  if (!automation.is_active) return { error: 'automation paused' }
 
   return enqueueAutomationWait({
     automationId: automation.id,

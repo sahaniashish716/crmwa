@@ -2,6 +2,8 @@ import type { AutomationContext } from './engine'
 import { resumePendingExecution } from './engine'
 import { runDueTimeBasedAutomations } from './time-based-cron'
 import { supabaseAdmin } from './admin-client'
+import { failPendingForInactiveAutomations } from './cancel-pending'
+import { isAutomationActive } from './automation-active'
 
 export interface AutomationCronDrainResult {
   /** Wait rows resumed this invocation. */
@@ -19,13 +21,27 @@ const STALE_RUNNING_MS = 30 * 60_000
 /** Rows left `running` after a serverless timeout never resume without this. */
 async function reclaimStaleRunningPending(admin: ReturnType<typeof supabaseAdmin>) {
   const staleBefore = new Date(Date.now() - STALE_RUNNING_MS).toISOString()
-  const { error } = await admin
+  const { data: stale, error: fetchErr } = await admin
     .from('automation_pending_executions')
-    .update({ status: 'pending' })
+    .select('id, automation_id')
     .eq('status', 'running')
     .lte('run_at', staleBefore)
-  if (error) {
-    console.error('[automations] cron drain: reclaim stale running failed:', error)
+
+  if (fetchErr) {
+    console.error('[automations] cron drain: list stale running failed:', fetchErr)
+    return
+  }
+
+  for (const row of stale ?? []) {
+    const active = await isAutomationActive(row.automation_id as string)
+    const { error } = await admin
+      .from('automation_pending_executions')
+      .update({ status: active ? 'pending' : 'failed' })
+      .eq('id', row.id as string)
+      .eq('status', 'running')
+    if (error) {
+      console.error('[automations] cron drain: reclaim stale running failed:', error)
+    }
   }
 }
 
@@ -51,6 +67,15 @@ async function processPendingRows(
   const admin = supabaseAdmin()
   let processed = 0
   for (const row of due) {
+    if (!(await isAutomationActive(row.automation_id as string))) {
+      await admin
+        .from('automation_pending_executions')
+        .update({ status: 'failed' })
+        .eq('id', row.id as string)
+        .in('status', ['pending', 'running'])
+      continue
+    }
+
     const { data: claim } = await admin
       .from('automation_pending_executions')
       .update({ status: 'running' })
@@ -83,6 +108,7 @@ export async function drainAutomationPendingWaits(
   accountId?: string,
 ): Promise<number> {
   await reclaimStaleRunningPending(supabaseAdmin())
+  await failPendingForInactiveAutomations(accountId)
   const { data: due, error } = await fetchDuePending(limit, accountId)
   if (error) {
     console.error('[automations] wait drain: pending fetch failed:', error)

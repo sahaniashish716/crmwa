@@ -155,6 +155,10 @@ export async function PATCH(
   }
 
   if (Object.keys(update).length > 0) {
+    if (update.is_active === false) {
+      await cancelPendingRunsForAutomation(id)
+    }
+
     const { error: updErr } = await admin
       .from('automations')
       .update(update)
@@ -162,9 +166,7 @@ export async function PATCH(
       .eq('account_id', accountId)
     if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 })
 
-    if (update.is_active === false) {
-      await cancelPendingRunsForAutomation(id)
-    } else if (update.is_active === true && existing.is_active === false) {
+    if (update.is_active === true && existing.is_active === false) {
       const { data: full } = await admin
         .from('automations')
         .select('*')

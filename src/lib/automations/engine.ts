@@ -42,6 +42,7 @@ import {
   isRecurrencePendingRow,
   scheduleTagRecurrenceIfConfigured,
 } from './recurrence'
+import { isAutomationActive } from './automation-active'
 
 // ------------------------------------------------------------
 // Public API
@@ -515,6 +516,17 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<ExecuteOutcome> {
 
 async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string> {
   const db = supabaseAdmin()
+
+  const outboundStep =
+    step.step_type === 'send_message' ||
+    step.step_type === 'send_template' ||
+    step.step_type === 'send_buttons' ||
+    step.step_type === 'send_list' ||
+    step.step_type === 'add_tag'
+
+  if (outboundStep && !(await isAutomationActive(args.automation.id))) {
+    throw new Error('Automation is paused — outbound step skipped')
+  }
 
   switch (step.step_type) {
     case 'send_message': {
