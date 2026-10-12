@@ -77,6 +77,20 @@ export function parseInternationalPhone(raw: string | null | undefined): string 
 }
 
 /**
+ * CSV / bulk import: accept `+91…` OR full international digits without
+ * `+` (e.g. `918766607845`). Rejects 10-digit national numbers without a
+ * country code — those stay ambiguous (issue #586).
+ */
+export function parsePhoneForCsvImport(raw: string | null | undefined): string | null {
+  const strict = parseInternationalPhone(raw)
+  if (strict) return strict
+  if (!raw?.trim()) return null
+  const digits = raw.trim().replace(/\D/g, '')
+  if (digits.length < 11 || digits.length > 15) return null
+  return parseInternationalPhone(`+${digits}`)
+}
+
+/**
  * Generate plausible phone number variants for retry when Meta's
  * sandbox rejects a number with error #131030 ("not in allowed list").
  *

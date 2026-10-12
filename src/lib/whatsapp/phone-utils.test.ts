@@ -4,6 +4,7 @@ import {
   isValidE164,
   normalizePhone,
   parseInternationalPhone,
+  parsePhoneForCsvImport,
   phoneVariants,
   phonesMatch,
   sanitizePhoneForMeta,
@@ -100,6 +101,19 @@ describe("isValidE164", () => {
 
   it("rejects the empty string", () => {
     expect(isValidE164("")).toBe(false);
+  });
+});
+
+describe("parsePhoneForCsvImport", () => {
+  it("accepts full international digits without a + prefix (CSV import)", () => {
+    expect(parsePhoneForCsvImport("918766607845")).toBe("918766607845");
+    expect(parsePhoneForCsvImport("919423371111")).toBe("919423371111");
+    expect(parsePhoneForCsvImport("14155551212")).toBe("14155551212");
+  });
+
+  it("still rejects 10-digit national numbers", () => {
+    expect(parsePhoneForCsvImport("9876543210")).toBeNull();
+    expect(parsePhoneForCsvImport("8766607845")).toBeNull();
   });
 });
 
